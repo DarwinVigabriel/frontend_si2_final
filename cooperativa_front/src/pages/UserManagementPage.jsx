@@ -8,7 +8,9 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
-  Edit
+  Edit,
+  Plus,
+  UserPlus
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { usuarioService } from '../api/socioService';
@@ -21,6 +23,21 @@ const UserManagementPage = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [actionLoading, setActionLoading] = useState(null);
+
+  // Estado para el modal de creación de usuario
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createFormData, setCreateFormData] = useState({
+    usuario: '',
+    nombres: '',
+    apellidos: '',
+    ci_nit: '',
+    email: '',
+    telefono: '',
+    password: '',
+    password_confirm: ''
+  });
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createErrors, setCreateErrors] = useState({});
 
   useEffect(() => {
     loadUsers();
@@ -95,6 +112,134 @@ const UserManagementPage = () => {
     }
   };
 
+  // Funciones para el modal de creación de usuario
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+
+    // Validaciones básicas
+    const errors = {};
+
+    if (!createFormData.usuario.trim()) {
+      errors.usuario = 'El nombre de usuario es requerido';
+    }
+
+    if (!createFormData.nombres.trim()) {
+      errors.nombres = 'Los nombres son requeridos';
+    }
+
+    if (!createFormData.apellidos.trim()) {
+      errors.apellidos = 'Los apellidos son requeridos';
+    }
+
+    if (!createFormData.ci_nit.trim()) {
+      errors.ci_nit = 'El CI/NIT es requerido';
+    }
+
+    if (!createFormData.email.trim()) {
+      errors.email = 'El email es requerido';
+    } else if (!/\S+@\S+\.\S+/.test(createFormData.email)) {
+      errors.email = 'El email no tiene un formato válido';
+    }
+
+    if (!createFormData.password) {
+      errors.password = 'La contraseña es requerida';
+    } else if (createFormData.password.length < 8) {
+      errors.password = 'La contraseña debe tener al menos 8 caracteres';
+    }
+
+    if (createFormData.password !== createFormData.password_confirm) {
+      errors.password_confirm = 'Las contraseñas no coinciden';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setCreateErrors(errors);
+      return;
+    }
+
+    try {
+      setCreateLoading(true);
+      setCreateErrors({});
+
+      // Preparar datos para enviar
+      const userData = {
+        usuario: createFormData.usuario.trim(),
+        nombres: createFormData.nombres.trim(),
+        apellidos: createFormData.apellidos.trim(),
+        ci_nit: createFormData.ci_nit.trim(),
+        email: createFormData.email.trim(),
+        telefono: createFormData.telefono.trim(),
+        password: createFormData.password
+      };
+
+      await usuarioService.crearUsuario(userData);
+
+      // Cerrar modal y resetear formulario
+      setShowCreateModal(false);
+      setCreateFormData({
+        usuario: '',
+        nombres: '',
+        apellidos: '',
+        ci_nit: '',
+        email: '',
+        telefono: '',
+        password: '',
+        password_confirm: ''
+      });
+
+      // Recargar lista de usuarios
+      await loadUsers();
+
+      alert('Usuario creado exitosamente.');
+    } catch (error) {
+      console.error('Error creando usuario:', error);
+
+      if (error.response?.data) {
+        // Manejar errores del backend
+        const backendErrors = {};
+        if (error.response.data.usuario) {
+          backendErrors.usuario = Array.isArray(error.response.data.usuario)
+            ? error.response.data.usuario[0]
+            : error.response.data.usuario;
+        }
+        if (error.response.data.ci_nit) {
+          backendErrors.ci_nit = Array.isArray(error.response.data.ci_nit)
+            ? error.response.data.ci_nit[0]
+            : error.response.data.ci_nit;
+        }
+        if (error.response.data.email) {
+          backendErrors.email = Array.isArray(error.response.data.email)
+            ? error.response.data.email[0]
+            : error.response.data.email;
+        }
+        if (error.response.data.non_field_errors) {
+          backendErrors.general = error.response.data.non_field_errors[0];
+        }
+
+        setCreateErrors(backendErrors);
+      } else {
+        alert('Error al crear usuario. Intente nuevamente.');
+      }
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setCreateFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+
+    // Limpiar error del campo cuando el usuario empiece a escribir
+    if (createErrors[name]) {
+      setCreateErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
+
   const filteredUsers = users.filter(user => {
     const nombreCompleto = `${user.nombres || ''} ${user.apellidos || ''}`.toLowerCase();
     const searchLower = searchTerm.toLowerCase();
@@ -122,13 +267,22 @@ const UserManagementPage = () => {
             Administra usuarios, sesiones y permisos del sistema
           </p>
         </div>
-        <button
-          onClick={loadUsers}
-          className="mt-4 sm:mt-0 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 font-medium py-2 px-4 rounded-lg transition-colors flex items-center space-x-2"
-        >
-          <RefreshCw className="w-4 h-4" />
-          <span>Actualizar</span>
-        </button>
+        <div className="flex items-center space-x-3 mt-4 sm:mt-0">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 font-medium py-2 px-4 rounded-lg transition-colors flex items-center space-x-2"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Crear Usuario</span>
+          </button>
+          <button
+            onClick={loadUsers}
+            className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 font-medium py-2 px-4 rounded-lg transition-colors flex items-center space-x-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Actualizar</span>
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -273,6 +427,231 @@ const UserManagementPage = () => {
           )}
         </div>
       </div>
+
+      {/* Modal de Creación de Usuario */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-white/20">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-white flex items-center space-x-2">
+                  <UserPlus className="w-5 h-5" />
+                  <span>Crear Nuevo Usuario</span>
+                </h2>
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="text-emerald-200 hover:text-white transition-colors"
+                >
+                  <XCircle className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreateUser} className="p-6 space-y-6">
+              {/* Información Personal */}
+              <div>
+                <h3 className="text-lg font-medium text-white mb-4">Información Personal</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-emerald-200 mb-2">
+                      Nombres *
+                    </label>
+                    <input
+                      type="text"
+                      name="nombres"
+                      value={createFormData.nombres}
+                      onChange={handleInputChange}
+                      className={`w-full px-3 py-2 bg-white/10 border rounded-lg text-white placeholder-emerald-200/60 focus:outline-none focus:border-emerald-400 transition-colors ${
+                        createErrors.nombres ? 'border-red-400' : 'border-white/20'
+                      }`}
+                      placeholder="Ingrese los nombres"
+                    />
+                    {createErrors.nombres && (
+                      <p className="text-red-400 text-xs mt-1">{createErrors.nombres}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-emerald-200 mb-2">
+                      Apellidos *
+                    </label>
+                    <input
+                      type="text"
+                      name="apellidos"
+                      value={createFormData.apellidos}
+                      onChange={handleInputChange}
+                      className={`w-full px-3 py-2 bg-white/10 border rounded-lg text-white placeholder-emerald-200/60 focus:outline-none focus:border-emerald-400 transition-colors ${
+                        createErrors.apellidos ? 'border-red-400' : 'border-white/20'
+                      }`}
+                      placeholder="Ingrese los apellidos"
+                    />
+                    {createErrors.apellidos && (
+                      <p className="text-red-400 text-xs mt-1">{createErrors.apellidos}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Información de Cuenta */}
+              <div>
+                <h3 className="text-lg font-medium text-white mb-4">Información de Cuenta</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-emerald-200 mb-2">
+                      Usuario *
+                    </label>
+                    <input
+                      type="text"
+                      name="usuario"
+                      value={createFormData.usuario}
+                      onChange={handleInputChange}
+                      className={`w-full px-3 py-2 bg-white/10 border rounded-lg text-white placeholder-emerald-200/60 focus:outline-none focus:border-emerald-400 transition-colors ${
+                        createErrors.usuario ? 'border-red-400' : 'border-white/20'
+                      }`}
+                      placeholder="Nombre de usuario"
+                    />
+                    {createErrors.usuario && (
+                      <p className="text-red-400 text-xs mt-1">{createErrors.usuario}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-emerald-200 mb-2">
+                      CI/NIT *
+                    </label>
+                    <input
+                      type="text"
+                      name="ci_nit"
+                      value={createFormData.ci_nit}
+                      onChange={handleInputChange}
+                      className={`w-full px-3 py-2 bg-white/10 border rounded-lg text-white placeholder-emerald-200/60 focus:outline-none focus:border-emerald-400 transition-colors ${
+                        createErrors.ci_nit ? 'border-red-400' : 'border-white/20'
+                      }`}
+                      placeholder="Cédula de identidad o NIT"
+                    />
+                    {createErrors.ci_nit && (
+                      <p className="text-red-400 text-xs mt-1">{createErrors.ci_nit}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-emerald-200 mb-2">
+                      Email *
+                    </label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={createFormData.email}
+                      onChange={handleInputChange}
+                      className={`w-full px-3 py-2 bg-white/10 border rounded-lg text-white placeholder-emerald-200/60 focus:outline-none focus:border-emerald-400 transition-colors ${
+                        createErrors.email ? 'border-red-400' : 'border-white/20'
+                      }`}
+                      placeholder="correo@ejemplo.com"
+                    />
+                    {createErrors.email && (
+                      <p className="text-red-400 text-xs mt-1">{createErrors.email}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-emerald-200 mb-2">
+                      Teléfono
+                    </label>
+                    <input
+                      type="tel"
+                      name="telefono"
+                      value={createFormData.telefono}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-emerald-200/60 focus:outline-none focus:border-emerald-400 transition-colors"
+                      placeholder="Número de teléfono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Contraseña */}
+              <div>
+                <h3 className="text-lg font-medium text-white mb-4">Contraseña</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-emerald-200 mb-2">
+                      Contraseña *
+                    </label>
+                    <input
+                      type="password"
+                      name="password"
+                      value={createFormData.password}
+                      onChange={handleInputChange}
+                      className={`w-full px-3 py-2 bg-white/10 border rounded-lg text-white placeholder-emerald-200/60 focus:outline-none focus:border-emerald-400 transition-colors ${
+                        createErrors.password ? 'border-red-400' : 'border-white/20'
+                      }`}
+                      placeholder="Mínimo 8 caracteres"
+                    />
+                    {createErrors.password && (
+                      <p className="text-red-400 text-xs mt-1">{createErrors.password}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-emerald-200 mb-2">
+                      Confirmar Contraseña *
+                    </label>
+                    <input
+                      type="password"
+                      name="password_confirm"
+                      value={createFormData.password_confirm}
+                      onChange={handleInputChange}
+                      className={`w-full px-3 py-2 bg-white/10 border rounded-lg text-white placeholder-emerald-200/60 focus:outline-none focus:border-emerald-400 transition-colors ${
+                        createErrors.password_confirm ? 'border-red-400' : 'border-white/20'
+                      }`}
+                      placeholder="Repita la contraseña"
+                    />
+                    {createErrors.password_confirm && (
+                      <p className="text-red-400 text-xs mt-1">{createErrors.password_confirm}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Error general */}
+              {createErrors.general && (
+                <div className="bg-red-500/20 border border-red-400 rounded-lg p-3">
+                  <p className="text-red-200 text-sm">{createErrors.general}</p>
+                </div>
+              )}
+
+              {/* Botones */}
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-white/20">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 text-emerald-200 hover:text-white transition-colors"
+                  disabled={createLoading}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={createLoading}
+                  className="bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-2 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  {createLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Creando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      <span>Crear Usuario</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

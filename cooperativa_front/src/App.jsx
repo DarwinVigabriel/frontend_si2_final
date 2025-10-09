@@ -16,6 +16,12 @@ import ParcelaDetailPage from './pages/ParcelaDetailPage';
 import ParcelasSocioPage from './pages/ParcelasSocioPage';
 import ReportesPage from './pages/ReportesPage';
 import RolesPage from './pages/RolesPage';
+import SemillasPage from './pages/SemillasPage';
+import SemillaDetailPage from './pages/SemillaDetailPage';
+import SemillaFormPage from './pages/SemillaFormPage';
+import InsumosPage from './pages/InsumosPage';
+import InsumoDetailPage from './pages/InsumoDetailPage';
+import InsumoFormPage from './pages/InsumoFormPage';
 
 // Componente protegido con layout
 const ProtectedLayout = ({ children }) => {
@@ -142,6 +148,70 @@ function App() {
               element={
                 <ProtectedLayout>
                   <RolesPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/semillas"
+              element={
+                <ProtectedLayout>
+                  <SemillasPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/semillas/nueva"
+              element={
+                <ProtectedLayout>
+                  <SemillaFormPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/semillas/:id"
+              element={
+                <ProtectedLayout>
+                  <SemillaDetailPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/semillas/:id/editar"
+              element={
+                <ProtectedLayout>
+                  <SemillaFormPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/insumos"
+              element={
+                <ProtectedLayout>
+                  <InsumosPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/insumos/nueva"
+              element={
+                <ProtectedLayout>
+                  <InsumoFormPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/insumos/:id"
+              element={
+                <ProtectedLayout>
+                  <InsumoDetailPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/insumos/:id/editar"
+              element={
+                <ProtectedLayout>
+                  <InsumoFormPage />
                 </ProtectedLayout>
               }
             />

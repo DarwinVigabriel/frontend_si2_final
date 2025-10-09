@@ -9,7 +9,9 @@ import {
   LogOut,
   UserCog,
   BarChart3,
-  Key
+  Key,
+  Sprout,
+  FlaskConical
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -44,6 +46,18 @@ const Sidebar = ({ isOpen, onClose }) => {
       path: '/roles',
       label: 'Roles',
       icon: Key,
+      always: true
+    },
+    {
+      path: '/semillas',
+      label: 'Semillas',
+      icon: Sprout,
+      always: true
+    },
+    {
+      path: '/insumos',
+      label: 'Insumos',
+      icon: FlaskConical,
       always: true
     },
     {
