@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Navbar from './Navbar';
 import Sidebar from './Sidebar';
+import Chatbot from '../Chatbot';
 
 const MainLayout = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -26,6 +27,9 @@ const MainLayout = ({ children }) => {
           {children}
         </main>
       </div>
+
+      {/* Chatbot flotante */}
+      <Chatbot />
     </div>
   );
 };
