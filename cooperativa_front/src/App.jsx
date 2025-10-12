@@ -23,6 +23,14 @@ import InsumosPage from './pages/InsumosPage';
 import InsumoDetailPage from './pages/InsumoDetailPage';
 import InsumoFormPage from './pages/InsumoFormPage';
 
+// ===== CU9: Gestión de Campañas =====
+import CampaignsPage from './pages/CU9_Campaigns/CampaignsPage';
+import CampaignDetailPage from './pages/CU9_Campaigns/CampaignDetailPage';
+
+// ===== CU11: Reportes =====
+import LaborsByCampaignReport from './pages/CU11_Reports/LaborsByCampaignReport';
+import ProductionByCampaignReport from './pages/CU11_Reports/ProductionByCampaignReport';
+import ProductionByPlotReport from './pages/CU11_Reports/ProductionByPlotReport';
 // Componente protegido con layout
 const ProtectedLayout = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -223,6 +231,7 @@ function App() {
                 </ProtectedLayout>
               }
             />
+
             <Route
               path="/reportes"
               element={
@@ -231,7 +240,46 @@ function App() {
                 </ProtectedLayout>
               }
             />
-
+            <Route
+              path="/campaigns"
+              element={
+                <ProtectedLayout>
+                  <CampaignsPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/campaigns/:id"
+              element={
+                <ProtectedLayout>
+                  <CampaignDetailPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/reports/labors"
+              element={
+                <ProtectedLayout>
+                  <LaborsByCampaignReport />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/reports/production-campaign"
+              element={
+                <ProtectedLayout>
+                  <ProductionByCampaignReport />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/reports/production-plot"
+              element={
+                <ProtectedLayout>
+                  <ProductionByPlotReport />
+                </ProtectedLayout>
+              }
+            />
             {/* Ruta por defecto - redirige al dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
 

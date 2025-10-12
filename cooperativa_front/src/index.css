@@ -111,3 +111,35 @@ textarea:focus-visible {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+
+/* Fix para selectores: opciones visibles con buen contraste */
+select {
+  color: white;
+}
+
+select option {
+  background-color: #064e3b; /* Verde oscuro emerald-950 */
+  color: #ffffff;
+  padding: 8px;
+}
+
+select option:hover,
+select option:focus,
+select option:checked {
+  background-color: #10b981; /* Verde emerald-500 */
+  color: #ffffff;
+}
+
+/* Mejorar apariencia en diferentes navegadores */
+select option:disabled {
+  background-color: #1f2937;
+  color: #6b7280;
+}
+
+/* Para Firefox */
+@-moz-document url-prefix() {
+  select option {
+    background-color: #064e3b !important;
+    color: #ffffff !important;
+  }
+}

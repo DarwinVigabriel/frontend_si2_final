@@ -131,6 +131,7 @@ const ReportesPage = () => {
   const tabs = [
     { id: 'socios', label: 'Reportes de Socios', icon: Users },
     { id: 'parcelas', label: 'Reportes de Parcelas', icon: MapPin },
+    { id: 'campañas', label: 'Reportes de Campañas', icon: Calendar },
     { id: 'estadisticas', label: 'Estadísticas Generales', icon: BarChart3 }
   ];
 
@@ -445,6 +446,180 @@ const ReportesPage = () => {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'campañas' && (
+        <div className="space-y-6">
+          {/* Header de la sección */}
+          <div className="bg-gradient-to-r from-emerald-500/10 to-blue-500/10 backdrop-blur-lg border border-white/20 rounded-xl p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <Calendar className="w-8 h-8 text-emerald-300" />
+              <div>
+                <h3 className="text-white font-bold text-xl">Reportes de Campañas Agrícolas</h3>
+                <p className="text-emerald-100/80 text-sm">
+                  Analiza labores, producción y rendimiento de tus campañas
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Tarjetas de reportes disponibles */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Reporte de Labores */}
+            <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6 hover:bg-white/15 transition-all duration-300 cursor-pointer group"
+                 onClick={() => navigate('/reports/labors')}>
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Activity className="w-6 h-6 text-purple-300" />
+                </div>
+                <h4 className="text-white font-bold text-lg">Labores por Campaña</h4>
+              </div>
+              <p className="text-emerald-100/70 text-sm mb-4">
+                Visualiza todas las labores agrícolas realizadas en una campaña: fertilización, riego, fumigación, etc.
+              </p>
+              <ul className="space-y-2 text-emerald-100/60 text-xs mb-4">
+                <li className="flex items-center space-x-2">
+                  <div className="w-1 h-1 bg-emerald-400 rounded-full"></div>
+                  <span>Total de labores y costos</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <div className="w-1 h-1 bg-emerald-400 rounded-full"></div>
+                  <span>Gráficos por tipo de labor</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <div className="w-1 h-1 bg-emerald-400 rounded-full"></div>
+                  <span>Detalle de insumos utilizados</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <div className="w-1 h-1 bg-emerald-400 rounded-full"></div>
+                  <span>Exportar a CSV</span>
+                </li>
+              </ul>
+              <div className="flex items-center justify-between text-purple-200 text-sm font-medium group-hover:text-purple-100">
+                <span>Ver reporte</span>
+                <TrendingUp className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+
+            {/* Reporte de Producción por Campaña */}
+            <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6 hover:bg-white/15 transition-all duration-300 cursor-pointer group"
+                 onClick={() => navigate('/reports/production-campaign')}>
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-12 h-12 bg-emerald-500/20 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <TrendingUp className="w-6 h-6 text-emerald-300" />
+                </div>
+                <h4 className="text-white font-bold text-lg">Producción por Campaña</h4>
+              </div>
+              <p className="text-emerald-100/70 text-sm mb-4">
+                Analiza la producción total de una campaña y compárala con las metas establecidas.
+              </p>
+              <ul className="space-y-2 text-emerald-100/60 text-xs mb-4">
+                <li className="flex items-center space-x-2">
+                  <div className="w-1 h-1 bg-emerald-400 rounded-full"></div>
+                  <span>Cumplimiento de metas</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <div className="w-1 h-1 bg-emerald-400 rounded-full"></div>
+                  <span>Rendimiento por hectárea</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <div className="w-1 h-1 bg-emerald-400 rounded-full"></div>
+                  <span>Distribución por producto</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <div className="w-1 h-1 bg-emerald-400 rounded-full"></div>
+                  <span>Valor económico total</span>
+                </li>
+              </ul>
+              <div className="flex items-center justify-between text-emerald-200 text-sm font-medium group-hover:text-emerald-100">
+                <span>Ver reporte</span>
+                <TrendingUp className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+
+            {/* Reporte de Producción por Parcela */}
+            <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6 hover:bg-white/15 transition-all duration-300 cursor-pointer group"
+                 onClick={() => navigate('/reports/production-plot')}>
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <MapPin className="w-6 h-6 text-blue-300" />
+                </div>
+                <h4 className="text-white font-bold text-lg">Producción por Parcela</h4>
+              </div>
+              <p className="text-emerald-100/70 text-sm mb-4">
+                Consulta el histórico de producción de una parcela específica a través del tiempo.
+              </p>
+              <ul className="space-y-2 text-emerald-100/60 text-xs mb-4">
+                <li className="flex items-center space-x-2">
+                  <div className="w-1 h-1 bg-emerald-400 rounded-full"></div>
+                  <span>Evolución de producción</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <div className="w-1 h-1 bg-emerald-400 rounded-full"></div>
+                  <span>Histórico de campañas</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <div className="w-1 h-1 bg-emerald-400 rounded-full"></div>
+                  <span>Análisis por cultivo</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <div className="w-1 h-1 bg-emerald-400 rounded-full"></div>
+                  <span>Exportar a PDF</span>
+                </li>
+              </ul>
+              <div className="flex items-center justify-between text-blue-200 text-sm font-medium group-hover:text-blue-100">
+                <span>Ver reporte</span>
+                <TrendingUp className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+          </div>
+
+          {/* Información adicional */}
+          <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6">
+            <h4 className="text-white font-medium mb-4">ℹ️ Información sobre Reportes de Campañas</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-emerald-100/70">
+              <div>
+                <h5 className="text-white font-medium mb-2">¿Qué puedes hacer?</h5>
+                <ul className="space-y-1 text-xs">
+                  <li>• Filtrar por fechas y tipos de labor</li>
+                  <li>• Comparar producción con metas establecidas</li>
+                  <li>• Analizar costos y rendimientos</li>
+                  <li>• Exportar datos en múltiples formatos</li>
+                </ul>
+              </div>
+              <div>
+                <h5 className="text-white font-medium mb-2">Requisitos</h5>
+                <ul className="space-y-1 text-xs">
+                  <li>• Tener campañas creadas en el sistema</li>
+                  <li>• Registrar labores y cosechas</li>
+                  <li>• Asignar parcelas y socios a campañas</li>
+                  <li>• Mantener datos actualizados</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* Acciones rápidas */}
+          <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6">
+            <h4 className="text-white font-medium mb-4">Acciones Rápidas</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button
+                onClick={() => navigate('/campaigns')}
+                className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+              >
+                <Calendar className="w-4 h-4" />
+                <span>Gestionar Campañas</span>
+              </button>
+              <button
+                onClick={() => exportarReporte('campañas')}
+                className="bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+              >
+                <Download className="w-4 h-4" />
+                <span>Exportar Todos los Reportes</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

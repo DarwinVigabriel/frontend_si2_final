@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   Home,
@@ -11,17 +11,30 @@ import {
   BarChart3,
   Key,
   Sprout,
-  FlaskConical
+  FlaskConical,
+  Calendar,
+  TrendingUp,
+  ChevronDown,
+  ChevronRight,
+  Map
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const Sidebar = ({ isOpen, onClose }) => {
   const { user, logout } = useAuth();
+  const [expandedMenus, setExpandedMenus] = useState({});
 
   const handleLogout = async () => {
     if (window.confirm('¿Está seguro de que desea cerrar sesión?')) {
       await logout();
     }
+  };
+
+  const toggleMenu = (label) => {
+    setExpandedMenus(prev => ({
+      ...prev,
+      [label]: !prev[label]
+    }));
   };
   const menuItems = [
     {
@@ -55,9 +68,21 @@ const Sidebar = ({ isOpen, onClose }) => {
       always: true
     },
     {
+      path: '/parcelas',
+      label: 'Parcelas',
+      icon: Map,
+      always: true
+    },
+    {
       path: '/insumos',
       label: 'Insumos',
       icon: FlaskConical,
+      always: true
+    },
+    {
+      path: '/campaigns',
+      label: 'Campañas',
+      icon: Calendar,
       always: true
     },
     {
@@ -70,7 +95,12 @@ const Sidebar = ({ isOpen, onClose }) => {
       path: '/reportes',
       label: 'Reportes',
       icon: BarChart3,
-      always: true
+      always: true,
+      subMenu: [
+        { path: '/reports/labors', label: 'Labores por Campaña', icon: TrendingUp },
+        { path: '/reports/production-campaign', label: 'Producción por Campaña', icon: TrendingUp },
+        { path: '/reports/production-plot', label: 'Producción por Parcela', icon: TrendingUp },
+      ]
     }
   ];
 
@@ -110,26 +140,77 @@ const Sidebar = ({ isOpen, onClose }) => {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-6">
+        <nav className="flex-1 px-4 py-6 overflow-y-auto">
           <ul className="space-y-2">
             {menuItems.map((item) => {
               const Icon = item.icon;
+              const hasSubMenu = item.subMenu && item.subMenu.length > 0;
+              const isExpanded = expandedMenus[item.label];
+
               return (
                 <li key={item.path}>
-                  <NavLink
-                    to={item.path}
-                    onClick={onClose}
-                    className={({ isActive }) => `
-                      flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
-                      ${isActive
-                        ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/30'
-                        : 'text-white/80 hover:text-white hover:bg-white/10'
-                      }
-                    `}
-                  >
-                    <Icon className="w-5 h-5 flex-shrink-0" />
-                    <span className="text-sm font-medium">{item.label}</span>
-                  </NavLink>
+                  {hasSubMenu ? (
+                    <div>
+                      {/* Menú principal con submenú */}
+                      <button
+                        onClick={() => toggleMenu(item.label)}
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-lg transition-all duration-200 text-white/80 hover:text-white hover:bg-white/10"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <Icon className="w-5 h-5 flex-shrink-0" />
+                          <span className="text-sm font-medium">{item.label}</span>
+                        </div>
+                        {isExpanded ? (
+                          <ChevronDown className="w-4 h-4" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4" />
+                        )}
+                      </button>
+
+                      {/* Submenú expandible */}
+                      {isExpanded && (
+                        <ul className="mt-2 ml-4 space-y-1 border-l-2 border-white/10 pl-4">
+                          {item.subMenu.map((subItem) => {
+                            const SubIcon = subItem.icon;
+                            return (
+                              <li key={subItem.path}>
+                                <NavLink
+                                  to={subItem.path}
+                                  onClick={onClose}
+                                  className={({ isActive }) => `
+                                    flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
+                                    ${isActive
+                                      ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/30'
+                                      : 'text-white/70 hover:text-white hover:bg-white/10'
+                                    }
+                                  `}
+                                >
+                                  <SubIcon className="w-4 h-4 flex-shrink-0" />
+                                  <span className="text-xs font-medium">{subItem.label}</span>
+                                </NavLink>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  ) : (
+                    /* Menú normal sin submenú */
+                    <NavLink
+                      to={item.path}
+                      onClick={onClose}
+                      className={({ isActive }) => `
+                        flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
+                        ${isActive
+                          ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/30'
+                          : 'text-white/80 hover:text-white hover:bg-white/10'
+                        }
+                      `}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      <span className="text-sm font-medium">{item.label}</span>
+                    </NavLink>
+                  )}
                 </li>
               );
             })}
