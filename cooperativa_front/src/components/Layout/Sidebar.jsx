@@ -16,7 +16,8 @@ import {
   TrendingUp,
   ChevronDown,
   ChevronRight,
-  Map
+  Map,
+  Package // ✅ NUEVO ICONO IMPORTADO
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -36,6 +37,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       [label]: !prev[label]
     }));
   };
+
   const menuItems = [
     {
       path: '/dashboard',
@@ -77,6 +79,13 @@ const Sidebar = ({ isOpen, onClose }) => {
       path: '/insumos',
       label: 'Insumos',
       icon: FlaskConical,
+      always: true
+    },
+    // ✅ NUEVO ITEM - CU15: Productos Cosechados
+    {
+      path: '/productos-cosechados',
+      label: 'Productos Cosechados',
+      icon: Package, // Icono apropiado para productos cosechados
       always: true
     },
     {

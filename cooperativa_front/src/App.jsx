@@ -31,6 +31,12 @@ import CampaignDetailPage from './pages/CU9_Campaigns/CampaignDetailPage';
 import LaborsByCampaignReport from './pages/CU11_Reports/LaborsByCampaignReport';
 import ProductionByCampaignReport from './pages/CU11_Reports/ProductionByCampaignReport';
 import ProductionByPlotReport from './pages/CU11_Reports/ProductionByPlotReport';
+
+// ===== CU15: Productos Cosechados =====
+import ProductosCosechadosPage from './pages/ProductosCosechadosPage';
+import ProductosCosechadosFormPage from './pages/ProductosCosechadosFormPage';
+import ProductosCosechadosDetailPage from './pages/ProductosCosechadosDetailPage';
+
 // Componente protegido con layout
 const ProtectedLayout = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -280,6 +286,41 @@ function App() {
                 </ProtectedLayout>
               }
             />
+
+            {/* ===== CU15: PRODUCTOS COSECHADOS ===== */}
+            <Route
+              path="/productos-cosechados"
+              element={
+                <ProtectedLayout>
+                  <ProductosCosechadosPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/productos-cosechados/nuevo"
+              element={
+                <ProtectedLayout>
+                  <ProductosCosechadosFormPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/productos-cosechados/:id"
+              element={
+                <ProtectedLayout>
+                  <ProductosCosechadosDetailPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/productos-cosechados/:id/editar"
+              element={
+                <ProtectedLayout>
+                  <ProductosCosechadosFormPage />
+                </ProtectedLayout>
+              }
+            />
+
             {/* Ruta por defecto - redirige al dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
