@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Calendar, MapPin, Package, Clock, DollarSign, User, AlertTriangle } from 'lucide-react';
-import laborService from '../api/labor';
+import laborService from '../api/laborService';
 import { TIPOS_LABOR, ESTADOS_LABOR } from '../utils/laborUtils';
 
 const LaborFormPage = () => {
