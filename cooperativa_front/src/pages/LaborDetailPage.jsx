@@ -17,7 +17,7 @@ import {
   XCircle,
   FileText
 } from 'lucide-react';
-import laborService from '../api/labor';
+import laborService from '../api/laborService';
 import { 
   getEstadoBadgeVariant, 
   getTipoLaborBadgeVariant, 
