@@ -21,7 +21,7 @@ import {
   PlayCircle,
   XCircle
 } from 'lucide-react';
-import laborService from '../api/labor';
+import laborService from '../api/laborService';
 import { 
   getEstadoBadgeVariant, 
   getTipoLaborBadgeVariant, 
