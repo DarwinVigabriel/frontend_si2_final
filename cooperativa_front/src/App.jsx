@@ -27,6 +27,11 @@ import InsumoFormPage from './pages/InsumoFormPage';
 import CampaignsPage from './pages/CU9_Campaigns/CampaignsPage';
 import CampaignDetailPage from './pages/CU9_Campaigns/CampaignDetailPage';
 
+// ===== CU10: Gestión de Labores Agrícolas =====
+import LaborPage from './pages/LaborPage';
+import LaborFormPage from './pages/LaborFormPage';
+import LaborDetailPage from './pages/LaborDetailPage';
+
 // ===== CU11: Reportes =====
 import LaborsByCampaignReport from './pages/CU11_Reports/LaborsByCampaignReport';
 import ProductionByCampaignReport from './pages/CU11_Reports/ProductionByCampaignReport';
@@ -246,6 +251,8 @@ function App() {
                 </ProtectedLayout>
               }
             />
+
+            {/* ===== CU9: CAMPAÑAS ===== */}
             <Route
               path="/campaigns"
               element={
@@ -262,6 +269,42 @@ function App() {
                 </ProtectedLayout>
               }
             />
+
+            {/* ===== CU10: LABORES AGRÍCOLAS ===== */}
+            <Route
+              path="/labores"
+              element={
+                <ProtectedLayout>
+                  <LaborPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/labores/nueva"
+              element={
+                <ProtectedLayout>
+                  <LaborFormPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/labores/editar/:id"
+              element={
+                <ProtectedLayout>
+                  <LaborFormPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/labores/:id"
+              element={
+                <ProtectedLayout>
+                  <LaborDetailPage />
+                </ProtectedLayout>
+              }
+            />
+
+            {/* ===== CU11: REPORTES ===== */}
             <Route
               path="/reports/labors"
               element={

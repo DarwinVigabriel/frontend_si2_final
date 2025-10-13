@@ -17,7 +17,8 @@ import {
   ChevronDown,
   ChevronRight,
   Map,
-  Package // ✅ NUEVO ICONO IMPORTADO
+  Package,
+  Tractor // ✅ NUEVO ICONO IMPORTADO PARA LABORES
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -79,6 +80,13 @@ const Sidebar = ({ isOpen, onClose }) => {
       path: '/insumos',
       label: 'Insumos',
       icon: FlaskConical,
+      always: true
+    },
+    // ✅ NUEVO ITEM - CU10: Labores Agrícolas
+    {
+      path: '/labores',
+      label: 'Labores Agrícolas',
+      icon: Tractor, // Icono apropiado para labores agrícolas
       always: true
     },
     // ✅ NUEVO ITEM - CU15: Productos Cosechados
