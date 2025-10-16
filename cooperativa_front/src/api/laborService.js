@@ -1,7 +1,7 @@
 // laborService.js
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000/';
+const API_BASE_URL = 'https://backend-si2-final.onrender.com';
 // Instancia de axios con credenciales y JSON por defecto
 export const api = axios.create({
   baseURL: API_BASE_URL,

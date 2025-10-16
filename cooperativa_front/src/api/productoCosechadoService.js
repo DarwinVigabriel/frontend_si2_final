@@ -1,7 +1,7 @@
 // /src/api/productoCosechadoService.js
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'https://backend-si2-final.onrender.com';
 
 // Axios con credenciales + JSON
 export const api = axios.create({

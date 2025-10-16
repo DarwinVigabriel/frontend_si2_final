@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Configuración base de axios
-const API_BASE_URL = 'https://agrocoop-frontend.netlify.app'; // Changed from 127.0.0.1 to localhost for cookie sharing
+const API_BASE_URL = 'https://backend-si2-final.onrender.com'; // Changed from 127.0.0.1 to localhost for cookie sharing
 
 const api = axios.create({
   baseURL: API_BASE_URL,
