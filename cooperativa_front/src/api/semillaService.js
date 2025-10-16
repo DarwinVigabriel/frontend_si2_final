@@ -1,6 +1,6 @@
 // /src/api/semillaService.js
 // Reusa la misma instancia axios (con CSRF/interceptores) de productoCosechadoService
-import { api } from 'https://backend-si2-final.onrender.com';
+import { api } from './productoCosechadoService';
 
 // Rutas candidatas (ajusta o añade si tu backend usa otras)
 const CANDIDATE_ENDPOINTS = [
