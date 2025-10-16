@@ -560,7 +560,7 @@ const LaborDetailPage = () => {
                     <div className="flex justify-between items-center">
                       <span className="text-emerald-200/80">Ubicación:</span>
                       <span className="text-white text-right">
-                        {labor?.campaña_nombre || labor?.parcela_nombre || 'No especificada'}
+                        {labor?.campania_nombre || labor?.parcela_nombre || 'No especificada'}
                       </span>
                     </div>
                     

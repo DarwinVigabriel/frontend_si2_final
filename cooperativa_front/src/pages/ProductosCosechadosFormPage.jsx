@@ -1,694 +1,500 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Package, Calendar, MapPin, AlertTriangle, CheckCircle } from 'lucide-react';
-import { productoCosechadoService, ESTADOS_PRODUCTO } from '../api/productoCosechadoService';
+// src/pages/ProductoCosechadoFormPage.jsx
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Save, ArrowLeft, Loader2, Info } from 'lucide-react';
+import productoCosechadoService, { ESTADOS_PRODUCTO_FALLBACK } from '../api/productoCosechadoService';
+import { campaignService } from '../api/campaignService';
+import { parcelaService } from '../api/parcelaService';
+import { cultivoService } from '../api/cultivoService';
+import laborService from '../api/laborService';
 
-const ProductosCosechadosFormPage = () => {
+const ProductoCosechadoFormPage = () => {
   const { id } = useParams();
+  const isEdit = Boolean(id);
   const navigate = useNavigate();
-  const isEditing = !!id;
 
-  const [formData, setFormData] = useState({
-    // Campos principales
+  // catálogos
+  const [estados, setEstados] = useState(ESTADOS_PRODUCTO_FALLBACK);
+  const [campanias, setCampanias] = useState([]);
+  const [parcelas, setParcelas] = useState([]);
+  const [cultivos, setCultivos] = useState([]);
+  const [labores, setLabores] = useState([]);
+
+  // origen (solo para filtrar labores)
+  const [origen, setOrigen] = useState(''); // '', 'campania', 'parcela'
+
+  const [form, setForm] = useState({
     fecha_cosecha: '',
     cantidad: '',
-    unidad_medida: 'kg',
+    unidad_medida: '',
     calidad: '',
-    
-    // Relaciones foráneas
-    cultivo: '',
+    cultivo: '',     // id del cultivo (string en UI)
     labor: '',
-    
-    // Estado y ubicación
     estado: 'En Almacén',
     lote: '',
     ubicacion_almacen: '',
-    
-    // Opción 1: Relación con campaña
     campania: '',
-    
-    // Opción 2: Relación con parcela
     parcela: '',
-    
-    // Campos adicionales
-    observaciones: ''
+    observaciones: '',
   });
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-  const [validationErrors, setValidationErrors] = useState({});
-  const [relaciones, setRelaciones] = useState({
-    cultivos: [],
-    labores: [],
-    campanias: [],
-    parcelas: []
-  });
+  const [errores, setErrores] = useState({});
 
-  useEffect(() => {
-    if (isEditing) {
-      cargarProducto();
-    }
-    cargarRelaciones();
-  }, [id]);
-
-  const cargarProducto = async () => {
+  // ---------- Cargar catálogos ----------
+  const loadCatalogs = async () => {
     try {
-      setLoading(true);
-      const response = await productoCosechadoService.obtener(id);
+      const est = await productoCosechadoService.getEstadosDisponibles();
+      setEstados(est);
+    } catch {
+      setEstados(ESTADOS_PRODUCTO_FALLBACK);
+    }
 
-      // Formatear fecha para input
-      const formattedData = {
-        ...response.data,
-        fecha_cosecha: response.data.fecha_cosecha ?
-          new Date(response.data.fecha_cosecha).toISOString().split('T')[0] : '',
-        cultivo: response.data.cultivo?.id || '',
-        labor: response.data.labor?.id || '',
-        campania: response.data.campania?.id || '',
-        parcela: response.data.parcela?.id || ''
-      };
+    try {
+      const cs = await campaignService.getCampaigns({ page_size: 1000 });
+      const arr = cs?.results || cs || [];
+      setCampanias(arr.map(c => ({
+        id: String(c.id),
+        nombre: c.nombre ?? c.name ?? `Campaña ${c.id}`
+      })));
+    } catch {
+      setCampanias([]);
+    }
 
-      setFormData(formattedData);
-    } catch (error) {
-      console.error('Error al cargar producto:', error);
-      setError('Error al cargar los datos del producto');
+    try {
+      const psRaw = await parcelaService.getParcelas({ page_size: 1000 });
+      const arr = psRaw?.results || psRaw || [];
+      setParcelas(arr.map(p => ({
+        id: String(p.id),
+        nombre: p.nombre ?? p.name ?? `Parcela ${p.id}`
+      })));
+    } catch {
+      setParcelas([]);
+    }
 
-      // Fallback a datos simulados
-      const mockData = {
-        fecha_cosecha: '2024-01-15',
-        cantidad: '100.50',
-        unidad_medida: 'kg',
-        calidad: 'Premium',
-        cultivo: '1',
-        labor: '1',
-        estado: 'En Almacén',
-        lote: '123.45',
-        ubicacion_almacen: 'Almacén A - Estante 5',
-        campania: '1',
-        parcela: '',
-        observaciones: 'Producto de primera calidad'
-      };
+    // Cultivos
+    try {
+      const cultRaw = await cultivoService.getCultivos({ page_size: 1000 });
+      const arr = cultRaw?.results || cultRaw || [];
+      setCultivos(arr.map(c => ({
+        id: String(c.id),
+        especie: c.especie ?? c.nombre ?? `Cultivo ${c.id}`,
+        variedad: c.variedad ?? '',
+        parcelaId: c.parcela ? String(c.parcela) : '',
+        parcelaNombre: c.parcela_nombre ?? '',
+        socioNombre: c.socio_nombre ?? '',
+      })));
+    } catch {
+      setCultivos([]);
+    }
 
-      setFormData(mockData);
-    } finally {
-      setLoading(false);
+    // Labores tipo COSECHA
+    try {
+      const data = await laborService.getLabores({ labor_tipo: 'COSECHA', page_size: 1000 });
+      const rows = data.results || data || [];
+      setLabores(rows.map(l => ({
+        id: String(l.id),
+        etiqueta: `${l.tipo_labor_display || l.labor} • ${l.fecha_labor}${
+          l.campania_nombre ? ` • ${l.campania_nombre}` : ''
+        }${l.parcela_nombre ? ` • ${l.parcela_nombre}` : ''}`,
+        campania: l.campania ? String(l.campania) : '',
+        parcela:  l.parcela  ? String(l.parcela)  : '',
+      })));
+    } catch {
+      setLabores([]);
     }
   };
 
-  const cargarRelaciones = async () => {
+  // ---------- Cargar si es edición ----------
+  const loadIfEdit = async () => {
+    if (!isEdit) return;
     try {
-      // En un proyecto real, estos datos vendrían de APIs específicas
-      // Por ahora usamos datos de ejemplo
-      setRelaciones({
-        cultivos: [
-          { id: 1, nombre: 'Manzana - Gala' },
-          { id: 2, nombre: 'Naranja - Valencia' },
-          { id: 3, nombre: 'Uva - Thompson' }
-        ],
-        labores: [
-          { id: 1, nombre: 'Cosecha Manual' },
-          { id: 2, nombre: 'Cosecha Mecánica' },
-          { id: 3, nombre: 'Cosecha Selectiva' }
-        ],
-        campanias: [
-          { id: 1, nombre: 'Campaña Verano 2024' },
-          { id: 2, nombre: 'Campaña Otoño 2024' },
-          { id: 3, nombre: 'Campaña Invierno 2024' }
-        ],
-        parcelas: [
-          { id: 1, nombre: 'Parcela Norte' },
-          { id: 2, nombre: 'Parcela Sur' },
-          { id: 3, nombre: 'Parcela Este' }
-        ]
+      const data = await productoCosechadoService.getProductoById(id);
+      setForm({
+        fecha_cosecha: data.fecha_cosecha ?? '',
+        cantidad: String(data.cantidad ?? ''),
+        unidad_medida: data.unidad_medida ?? '',
+        calidad: data.calidad ?? '',
+        cultivo: data.cultivo ? String(data.cultivo) : '',
+        labor: data.labor ? String(data.labor) : '',
+        estado: data.estado ?? 'En Almacén',
+        lote: data.lote != null ? String(data.lote) : '',
+        ubicacion_almacen: data.ubicacion_almacen ?? '',
+        campania: data.campania ? String(data.campania) : '',
+        parcela: data.parcela ? String(data.parcela) : '',
+        observaciones: data.observaciones ?? '',
       });
-    } catch (error) {
-      console.error('Error al cargar relaciones:', error);
+      setOrigen(data.campania ? 'campania' : data.parcela ? 'parcela' : '');
+    } catch (e) {
+      console.error('No se pudo cargar el producto:', e);
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    
-    // Si se selecciona campaña, limpiar parcela y viceversa
-    if (name === 'campania' && value) {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value,
-        parcela: ''
-      }));
-    } else if (name === 'parcela' && value) {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value,
-        campania: ''
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value
-      }));
+  // ---------- Filtrar labores por origen ----------
+  const laboresFiltradas = useMemo(() => {
+    if (!origen) return labores;
+    if (origen === 'campania' && form.campania) {
+      return labores.filter(l => l.campania === form.campania);
     }
+    if (origen === 'parcela' && form.parcela) {
+      return labores.filter(l => l.parcela === form.parcela);
+    }
+    return labores;
+  }, [labores, origen, form.campania, form.parcela]);
 
-    // Limpiar error de validación cuando el usuario comienza a escribir
-    if (validationErrors[name]) {
-      setValidationErrors(prev => ({
-        ...prev,
-        [name]: null
-      }));
-    }
+  // ---------- Handlers ----------
+  const handleCultivoChange = (e) => {
+    const v = e.target.value; // id (string)
+    const c = cultivos.find(x => x.id === v);
+    setForm(prev => ({
+      ...prev,
+      cultivo: v,
+      // autocompletamos parcela desde el cultivo (si existe)
+      parcela: c?.parcelaId || '',
+      campania: '', // aseguramos exclusividad
+    }));
+    if (c?.parcelaId) setOrigen('parcela');
   };
 
-  const validateForm = () => {
-    const errors = {};
-
-    // Validaciones de campos requeridos
-    if (!formData.fecha_cosecha.trim()) {
-      errors.fecha_cosecha = 'La fecha de cosecha es requerida';
-    }
-
-    if (!formData.cantidad || formData.cantidad <= 0) {
-      errors.cantidad = 'La cantidad debe ser mayor a 0';
-    }
-
-    if (!formData.unidad_medida.trim()) {
-      errors.unidad_medida = 'La unidad de medida es requerida';
-    }
-
-    if (!formData.calidad.trim()) {
-      errors.calidad = 'La calidad es requerida';
-    }
-
-    if (!formData.cultivo) {
-      errors.cultivo = 'El cultivo es requerido';
-    }
-
-    if (!formData.labor) {
-      errors.labor = 'La labor es requerida';
-    }
-
-    if (!formData.lote || formData.lote <= 0) {
-      errors.lote = 'El lote debe ser mayor a 0';
-    }
-
-    if (!formData.ubicacion_almacen.trim()) {
-      errors.ubicacion_almacen = 'La ubicación en almacén es requerida';
-    }
-
-    // Validación específica: campaña O parcela (una de las dos)
-    if (!formData.campania && !formData.parcela) {
-      errors.campania = 'Debe especificar al menos una campaña o una parcela';
-      errors.parcela = 'Debe especificar al menos una campaña o una parcela';
-    }
-
-    // Validación: no pueden tener ambas opciones
-    if (formData.campania && formData.parcela) {
-      errors.campania = 'Solo puede especificar campaña O parcela, no ambas';
-      errors.parcela = 'Solo puede especificar campaña O parcela, no ambas';
-    }
-
-    // Validación de fecha futura
-    if (formData.fecha_cosecha) {
-      const fechaCosecha = new Date(formData.fecha_cosecha);
-      const hoy = new Date();
-      if (fechaCosecha > hoy) {
-        errors.fecha_cosecha = 'La fecha de cosecha no puede ser en el futuro';
+  const handleLaborChange = (e) => {
+    const v = e.target.value;
+    const l = labores.find(x => x.id === v);
+    setForm(prev => {
+      const next = { ...prev, labor: v };
+      if (l?.campania) {
+        next.campania = l.campania;
+        next.parcela = '';
+        setOrigen('campania');
+      } else if (l?.parcela) {
+        next.parcela = l.parcela;
+        next.campania = '';
+        setOrigen('parcela');
       }
-    }
-
-    setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
+      return next;
+    });
   };
 
-  const validarLoteUnico = async (lote) => {
-    try {
-      const response = await productoCosechadoService.validarLote(lote);
-      return !response.data.existe;
-    } catch (error) {
-      console.error('Error al validar lote:', error);
-      return true; // En caso de error, permitimos continuar
-    }
+  const handleCampaniaChange = (e) => {
+    const v = e.target.value;
+    setOrigen('campania');
+    setForm(prev => {
+      const laborActual = prev.labor ? labores.find(l => l.id === prev.labor) : null;
+      const keepLabor = laborActual && laborActual.campania === v;
+      return { ...prev, campania: v, parcela: '', labor: keepLabor ? prev.labor : '' };
+    });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleParcelaChange = (e) => {
+    const v = e.target.value;
+    setOrigen('parcela');
+    setForm(prev => {
+      const laborActual = prev.labor ? labores.find(l => l.id === prev.labor) : null;
+      const keepLabor = laborActual && laborActual.parcela === v;
+      return { ...prev, parcela: v, campania: '', labor: keepLabor ? prev.labor : '' };
+    });
+  };
 
-    if (!validateForm()) {
-      return;
+  // ---------- Validación (alineada con tu modelo) ----------
+  const validate = () => {
+    const e = {};
+    if (!form.fecha_cosecha) e.fecha_cosecha = 'Requerido';
+    if (!form.cantidad || Number(form.cantidad) <= 0) e.cantidad = 'Cantidad > 0';
+    if (!form.unidad_medida) e.unidad_medida = 'Requerido';
+    if (!form.calidad) e.calidad = 'Requerido';
+    if (!form.cultivo) e.cultivo = 'Seleccione un cultivo';
+    // Tu modelo exige labor (OneToOneField sin null=True)
+    if (!form.labor) e.labor = 'Seleccione una labor de cosecha';
+    if (!form.estado) e.estado = 'Requerido';
+    if (!form.lote || Number(form.lote) <= 0) e.lote = 'Lote > 0';
+    if (!form.ubicacion_almacen) e.ubicacion_almacen = 'Requerido';
+
+    // exactamente una entre campania o parcela
+    const hasCamp = !!form.campania;
+    const hasParc = !!form.parcela;
+    if ((hasCamp && hasParc) || (!hasCamp && !hasParc)) {
+      e.campania = 'Seleccione SOLO una: Campaña o Parcela (o deje que se autocompletar con el cultivo)';
+      e.parcela = 'Seleccione SOLO una: Campaña o Parcela (o deje que se autocompletar con el cultivo)';
     }
 
-    // Validar lote único (solo en creación)
-    if (!isEditing) {
-      const loteUnico = await validarLoteUnico(formData.lote);
-      if (!loteUnico) {
-        setValidationErrors(prev => ({
-          ...prev,
-          lote: 'El número de lote ya existe'
-        }));
-        return;
-      }
-    }
+    setErrores(e);
+    return Object.keys(e).length === 0;
+  };
 
+  // ---------- Submit ----------
+  const onSubmit = async (ev) => {
+    ev.preventDefault();
+    if (!validate()) return;
+
+    setSaving(true);
     try {
-      setSaving(true);
-      setError(null);
-
-      const dataToSend = {
-        ...formData,
-        cantidad: parseFloat(formData.cantidad),
-        lote: parseFloat(formData.lote),
-        campania: formData.campania || null,
-        parcela: formData.parcela || null,
-        fecha_cosecha: formData.fecha_cosecha
+      const payload = {
+        fecha_cosecha: form.fecha_cosecha,
+        cantidad: Number(form.cantidad),
+        unidad_medida: form.unidad_medida,
+        calidad: form.calidad,
+        cultivo: parseInt(form.cultivo, 10),            // <- si tu API usa 'cultivo_id', cambia esta línea por: cultivo_id: parseInt(form.cultivo,10)
+        labor: parseInt(form.labor, 10),
+        estado: form.estado,
+        lote: Number(form.lote),
+        ubicacion_almacen: form.ubicacion_almacen,
+        campania: form.campania ? parseInt(form.campania, 10) : null,
+        parcela: form.parcela ? parseInt(form.parcela, 10) : null,
+        observaciones: form.observaciones || '',
       };
 
-      if (isEditing) {
-        await productoCosechadoService.actualizar(id, dataToSend);
+      // console.log('Payload enviado:', payload);
+
+      if (isEdit) {
+        await productoCosechadoService.updateProducto(id, payload);
       } else {
-        await productoCosechadoService.crear(dataToSend);
+        await productoCosechadoService.crearProducto(payload);
       }
-
-      navigate('/productos-cosechados', {
-        state: {
-          message: `Producto cosechado ${isEditing ? 'actualizado' : 'creado'} exitosamente`,
-          type: 'success'
-        }
-      });
-    } catch (error) {
-      console.error('Error al guardar producto:', error);
-      const errorMessage = error.response?.data || error.message;
-      setError(`Error al ${isEditing ? 'actualizar' : 'crear'} el producto: ${JSON.stringify(errorMessage)}`);
+      navigate('/productos-cosechados');
+    } catch (e) {
+      const apiErrors = e?.response?.data;
+      if (apiErrors && typeof apiErrors === 'object') {
+        setErrores(Object.fromEntries(
+          Object.entries(apiErrors).map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : String(v)])
+        ));
+      } else {
+        alert('No se pudo guardar: ' + (e?.message || ''));
+      }
     } finally {
       setSaving(false);
     }
   };
 
-  const getUnidadOptions = () => {
-    return [
-      { value: 'kg', label: 'Kilogramos' },
-      { value: 'ton', label: 'Toneladas' },
-      { value: 'qq', label: 'Quintales' },
-      { value: 'lb', label: 'Libras' },
-      { value: 'saco', label: 'Sacos' },
-      { value: 'caja', label: 'Cajas' }
-    ];
-  };
+  // ---------- Init ----------
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        await loadCatalogs();
+        await loadIfEdit();
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [id]);
 
-  const getCalidadOptions = () => {
-    return [
-      { value: 'Premium', label: 'Premium' },
-      { value: 'Estándar', label: 'Estándar' },
-      { value: 'Comercial', label: 'Comercial' },
-      { value: 'Segunda', label: 'Segunda' },
-      { value: 'Descarte', label: 'Descarte' }
-    ];
-  };
-
+  // ---------- UI ----------
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
-          <span className="ml-3 text-emerald-100">Cargando datos del producto...</span>
-        </div>
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <Loader2 className="animate-spin w-8 h-8 text-emerald-400" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={() => navigate('/productos-cosechados')}
-            className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-white">
-              {isEditing ? 'Editar' : 'Crear'} Producto Cosechado
-            </h1>
-            <p className="text-emerald-100/80 mt-1">
-              {isEditing ? 'Modificar la información del producto cosechado' : 'Registrar un nuevo producto cosechado'}
-            </p>
-          </div>
-        </div>
+        <h1 className="text-2xl font-bold text-white">{isEdit ? 'Editar Producto Cosechado' : 'Nuevo Producto Cosechado'}</h1>
+        <button onClick={() => navigate('/productos-cosechados')} className="text-emerald-300 underline flex items-center gap-1">
+          <ArrowLeft className="w-4 h-4" /> Volver
+        </button>
       </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-500/20 border border-red-500/30 rounded-xl p-4">
-          <div className="flex items-center space-x-2">
-            <AlertTriangle className="w-5 h-5 text-red-400" />
-            <span className="text-red-200 font-medium">Error</span>
-          </div>
-          <p className="text-red-100/80 mt-1">{error}</p>
-        </div>
-      )}
-
-      {/* Form */}
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Información de Cosecha */}
-        <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6">
-          <h2 className="text-xl font-semibold text-white mb-6 flex items-center">
-            <Calendar className="w-5 h-5 mr-2 text-emerald-400" />
-            Información de Cosecha
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-emerald-200/80 mb-2">
-                Fecha de Cosecha *
-              </label>
-              <input
-                type="date"
-                name="fecha_cosecha"
-                value={formData.fecha_cosecha}
-                onChange={handleInputChange}
-                max={new Date().toISOString().split('T')[0]}
-                className={`w-full bg-white/10 border rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                  validationErrors.fecha_cosecha ? 'border-red-500' : 'border-white/20'
-                }`}
-              />
-              {validationErrors.fecha_cosecha && (
-                <p className="text-red-400 text-sm mt-1">{validationErrors.fecha_cosecha}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-emerald-200/80 mb-2">
-                Cantidad *
-              </label>
-              <input
-                type="number"
-                name="cantidad"
-                value={formData.cantidad}
-                onChange={handleInputChange}
-                min="0"
-                step="0.01"
-                className={`w-full bg-white/10 border rounded-lg px-3 py-2 text-white placeholder-emerald-200/50 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                  validationErrors.cantidad ? 'border-red-500' : 'border-white/20'
-                }`}
-                placeholder="0.00"
-              />
-              {validationErrors.cantidad && (
-                <p className="text-red-400 text-sm mt-1">{validationErrors.cantidad}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-emerald-200/80 mb-2">
-                Unidad de Medida *
-              </label>
-              <select
-                name="unidad_medida"
-                value={formData.unidad_medida}
-                onChange={handleInputChange}
-                className={`w-full bg-white/10 border rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                  validationErrors.unidad_medida ? 'border-red-500' : 'border-white/20'
-                }`}
-              >
-                {getUnidadOptions().map(option => (
-                  <option key={option.value} value={option.value} className="bg-gray-800">
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              {validationErrors.unidad_medida && (
-                <p className="text-red-400 text-sm mt-1">{validationErrors.unidad_medida}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-emerald-200/80 mb-2">
-                Calidad *
-              </label>
-              <select
-                name="calidad"
-                value={formData.calidad}
-                onChange={handleInputChange}
-                className={`w-full bg-white/10 border rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                  validationErrors.calidad ? 'border-red-500' : 'border-white/20'
-                }`}
-              >
-                <option value="" className="bg-gray-800">Seleccione calidad</option>
-                {getCalidadOptions().map(option => (
-                  <option key={option.value} value={option.value} className="bg-gray-800">
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              {validationErrors.calidad && (
-                <p className="text-red-400 text-sm mt-1">{validationErrors.calidad}</p>
-              )}
-            </div>
-          </div>
+      <form onSubmit={onSubmit} className="bg-white/10 border border-white/20 rounded-xl p-6 space-y-5">
+        {/* Fecha */}
+        <div>
+          <label className="block text-emerald-100/90 text-sm mb-1">Fecha de cosecha</label>
+          <input
+            type="date"
+            value={form.fecha_cosecha}
+            onChange={(e) => setForm({ ...form, fecha_cosecha: e.target.value })}
+            disabled={saving}
+            className={`w-full px-3 py-2 bg-white/10 border ${errores.fecha_cosecha ? 'border-red-400' : 'border-white/20'} rounded-lg text-white`}
+          />
+          {errores.fecha_cosecha && <p className="text-red-300 text-sm mt-1">{errores.fecha_cosecha}</p>}
         </div>
 
-        {/* Relaciones */}
-        <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6">
-          <h2 className="text-xl font-semibold text-white mb-6 flex items-center">
-            <Package className="w-5 h-5 mr-2 text-blue-400" />
-            Relaciones
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-emerald-200/80 mb-2">
-                Cultivo *
-              </label>
-              <select
-                name="cultivo"
-                value={formData.cultivo}
-                onChange={handleInputChange}
-                className={`w-full bg-white/10 border rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                  validationErrors.cultivo ? 'border-red-500' : 'border-white/20'
-                }`}
-              >
-                <option value="" className="bg-gray-800">Seleccione cultivo</option>
-                {relaciones.cultivos.map(cultivo => (
-                  <option key={cultivo.id} value={cultivo.id} className="bg-gray-800">
-                    {cultivo.nombre}
-                  </option>
-                ))}
-              </select>
-              {validationErrors.cultivo && (
-                <p className="text-red-400 text-sm mt-1">{validationErrors.cultivo}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-emerald-200/80 mb-2">
-                Labor de Cosecha *
-              </label>
-              <select
-                name="labor"
-                value={formData.labor}
-                onChange={handleInputChange}
-                className={`w-full bg-white/10 border rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                  validationErrors.labor ? 'border-red-500' : 'border-white/20'
-                }`}
-              >
-                <option value="" className="bg-gray-800">Seleccione labor</option>
-                {relaciones.labores.map(labor => (
-                  <option key={labor.id} value={labor.id} className="bg-gray-800">
-                    {labor.nombre}
-                  </option>
-                ))}
-              </select>
-              {validationErrors.labor && (
-                <p className="text-red-400 text-sm mt-1">{validationErrors.labor}</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Origen (Campaña o Parcela) */}
-        <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6">
-          <h2 className="text-xl font-semibold text-white mb-6 flex items-center">
-            <MapPin className="w-5 h-5 mr-2 text-purple-400" />
-            Origen del Producto
-          </h2>
-          <p className="text-emerald-200/60 mb-4 text-sm">
-            Seleccione <strong>campaña</strong> O <strong>parcela</strong> como origen del producto (solo una opción)
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-emerald-200/80 mb-2">
-                Campaña
-              </label>
-              <select
-                name="campania"
-                value={formData.campania}
-                onChange={handleInputChange}
-                className={`w-full bg-white/10 border rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                  validationErrors.campania ? 'border-red-500' : 'border-white/20'
-                }`}
-              >
-                <option value="" className="bg-gray-800">Seleccione campaña (opcional)</option>
-                {relaciones.campanias.map(campania => (
-                  <option key={campania.id} value={campania.id} className="bg-gray-800">
-                    {campania.nombre}
-                  </option>
-                ))}
-              </select>
-              {validationErrors.campania && (
-                <p className="text-red-400 text-sm mt-1">{validationErrors.campania}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-emerald-200/80 mb-2">
-                Parcela
-              </label>
-              <select
-                name="parcela"
-                value={formData.parcela}
-                onChange={handleInputChange}
-                className={`w-full bg-white/10 border rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                  validationErrors.parcela ? 'border-red-500' : 'border-white/20'
-                }`}
-              >
-                <option value="" className="bg-gray-800">Seleccione parcela (opcional)</option>
-                {relaciones.parcelas.map(parcela => (
-                  <option key={parcela.id} value={parcela.id} className="bg-gray-800">
-                    {parcela.nombre}
-                  </option>
-                ))}
-              </select>
-              {validationErrors.parcela && (
-                <p className="text-red-400 text-sm mt-1">{validationErrors.parcela}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Indicador de selección */}
-          {(formData.campania || formData.parcela) && (
-            <div className="mt-4 p-3 bg-emerald-500/20 border border-emerald-500/30 rounded-lg">
-              <div className="flex items-center space-x-2 text-emerald-200">
-                <CheckCircle className="w-4 h-4" />
-                <span className="text-sm">
-                  Origen seleccionado: <strong>
-                    {formData.campania ? 
-                      `Campaña: ${relaciones.campanias.find(c => c.id == formData.campania)?.nombre}` : 
-                      `Parcela: ${relaciones.parcelas.find(p => p.id == formData.parcela)?.nombre}`
-                    }
-                  </strong>
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Estado y Almacenamiento */}
-        <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6">
-          <h2 className="text-xl font-semibold text-white mb-6 flex items-center">
-            <Package className="w-5 h-5 mr-2 text-orange-400" />
-            Estado y Almacenamiento
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-emerald-200/80 mb-2">
-                Estado
-              </label>
-              <select
-                name="estado"
-                value={formData.estado}
-                onChange={handleInputChange}
-                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                {ESTADOS_PRODUCTO.map(estado => (
-                  <option key={estado.valor} value={estado.valor} className="bg-gray-800">
-                    {estado.etiqueta}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-emerald-200/80 mb-2">
-                Número de Lote *
-              </label>
-              <input
-                type="number"
-                name="lote"
-                value={formData.lote}
-                onChange={handleInputChange}
-                min="0"
-                step="0.01"
-                className={`w-full bg-white/10 border rounded-lg px-3 py-2 text-white placeholder-emerald-200/50 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                  validationErrors.lote ? 'border-red-500' : 'border-white/20'
-                }`}
-                placeholder="123.45"
-              />
-              {validationErrors.lote && (
-                <p className="text-red-400 text-sm mt-1">{validationErrors.lote}</p>
-              )}
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-emerald-200/80 mb-2">
-                Ubicación en Almacén *
-              </label>
-              <input
-                type="text"
-                name="ubicacion_almacen"
-                value={formData.ubicacion_almacen}
-                onChange={handleInputChange}
-                className={`w-full bg-white/10 border rounded-lg px-3 py-2 text-white placeholder-emerald-200/50 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                  validationErrors.ubicacion_almacen ? 'border-red-500' : 'border-white/20'
-                }`}
-                placeholder="Ej: Almacén A - Estante 5 - Fila 3"
-              />
-              {validationErrors.ubicacion_almacen && (
-                <p className="text-red-400 text-sm mt-1">{validationErrors.ubicacion_almacen}</p>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-6">
-            <label className="block text-sm font-medium text-emerald-200/80 mb-2">
-              Observaciones
-            </label>
-            <textarea
-              name="observaciones"
-              value={formData.observaciones}
-              onChange={handleInputChange}
-              rows={4}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white placeholder-emerald-200/50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              placeholder="Observaciones adicionales sobre el producto cosechado..."
+        {/* Cantidad / Medida / Calidad */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-emerald-100/90 text-sm mb-1">Cantidad</label>
+            <input
+              type="number" step="0.01" min="0"
+              value={form.cantidad}
+              onChange={(e) => setForm({ ...form, cantidad: e.target.value })}
+              disabled={saving}
+              className={`w-full px-3 py-2 bg-white/10 border ${errores.cantidad ? 'border-red-400' : 'border-white/20'} rounded-lg text-white`}
             />
+            {errores.cantidad && <p className="text-red-300 text-sm mt-1">{errores.cantidad}</p>}
+          </div>
+          <div>
+            <label className="block text-emerald-100/90 text-sm mb-1">Unidad de medida</label>
+            <input
+              type="text" placeholder="kg, t, qq, etc."
+              value={form.unidad_medida}
+              onChange={(e) => setForm({ ...form, unidad_medida: e.target.value })}
+              disabled={saving}
+              className={`w-full px-3 py-2 bg-white/10 border ${errores.unidad_medida ? 'border-red-400' : 'border-white/20'} rounded-lg text-white`}
+            />
+            {errores.unidad_medida && <p className="text-red-300 text-sm mt-1">{errores.unidad_medida}</p>}
+          </div>
+          <div>
+            <label className="block text-emerald-100/90 text-sm mb-1">Calidad</label>
+            <input
+              type="text" placeholder="Premium, Estándar…"
+              value={form.calidad}
+              onChange={(e) => setForm({ ...form, calidad: e.target.value })}
+              disabled={saving}
+              className={`w-full px-3 py-2 bg-white/10 border ${errores.calidad ? 'border-red-400' : 'border-white/20'} rounded-lg text-white`}
+            />
+            {errores.calidad && <p className="text-red-300 text-sm mt-1">{errores.calidad}</p>}
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex justify-end space-x-4">
+        {/* Cultivo y Labor */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-emerald-100/90 text-sm mb-1">Cultivo registrado</label>
+            <select
+              value={form.cultivo}
+              onChange={handleCultivoChange}
+              disabled={saving}
+              className={`w-full px-3 py-2 bg-white/10 border ${errores.cultivo ? 'border-red-400' : 'border-white/20'} rounded-lg text-white`}
+            >
+              <option value="" className="bg-gray-800">Seleccione…</option>
+              {cultivos.map(c => (
+                <option key={c.id} value={c.id} className="bg-gray-800">
+                  🌱 {c.especie}{c.variedad ? ` — ${c.variedad}` : ''}{c.parcelaNombre ? ` • ${c.parcelaNombre}` : ''}{c.socioNombre ? ` • ${c.socioNombre}` : ''}
+                </option>
+              ))}
+            </select>
+            {errores.cultivo && <p className="text-red-300 text-sm mt-1">{errores.cultivo}</p>}
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="block text-emerald-100/90 text-sm mb-1">Labor de cosecha</label>
+              <span className="text-emerald-200/70 text-xs inline-flex items-center gap-1">
+                <Info className="w-3 h-3" /> Solo tipo “COSECHA”
+              </span>
+            </div>
+            <select
+              value={form.labor}
+              onChange={handleLaborChange}
+              disabled={saving}
+              className={`w-full px-3 py-2 bg-white/10 border ${errores.labor ? 'border-red-400' : 'border-white/20'} rounded-lg text-white`}
+            >
+              <option value="" className="bg-gray-800">Seleccione…</option>
+              {laboresFiltradas.map(l => (
+                <option key={l.id} value={l.id} className="bg-gray-800">{l.etiqueta}</option>
+              ))}
+            </select>
+            {errores.labor && <p className="text-red-300 text-sm mt-1">{errores.labor}</p>}
+          </div>
+        </div>
+
+        {/* Estado • Lote • Ubicación */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-emerald-100/90 text-sm mb-1">Estado</label>
+            <select
+              value={form.estado}
+              onChange={(e) => setForm({ ...form, estado: e.target.value })}
+              disabled={saving}
+              className={`w-full px-3 py-2 bg-white/10 border ${errores.estado ? 'border-red-400' : 'border-white/20'} rounded-lg text-white`}
+            >
+              <option value="" className="bg-gray-800">Seleccione…</option>
+              {estados.map(e => (
+                <option key={e.valor} value={e.valor} className="bg-gray-800">{e.etiqueta}</option>
+              ))}
+            </select>
+            {errores.estado && <p className="text-red-300 text-sm mt-1">{errores.estado}</p>}
+          </div>
+
+          <div>
+            <label className="block text-emerald-100/90 text-sm mb-1">Lote</label>
+            <input
+              type="number" step="0.01" min="0"
+              value={form.lote}
+              onChange={(e) => setForm({ ...form, lote: e.target.value })}
+              disabled={saving}
+              className={`w-full px-3 py-2 bg-white/10 border ${errores.lote ? 'border-red-400' : 'border-white/20'} rounded-lg text-white`}
+            />
+            {errores.lote && <p className="text-red-300 text-sm mt-1">{errores.lote}</p>}
+          </div>
+
+          <div>
+            <label className="block text-emerald-100/90 text-sm mb-1">Ubicación en almacén</label>
+            <input
+              type="text"
+              value={form.ubicacion_almacen}
+              onChange={(e) => setForm({ ...form, ubicacion_almacen: e.target.value })}
+              disabled={saving}
+              className={`w-full px-3 py-2 bg-white/10 border ${errores.ubicacion_almacen ? 'border-red-400' : 'border-white/20'} rounded-lg text-white`}
+            />
+            {errores.ubicacion_almacen && <p className="text-red-300 text-sm mt-1">{errores.ubicacion_almacen}</p>}
+          </div>
+        </div>
+
+        {/* Origen manual (opcional) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-emerald-100/90 text-sm mb-1">Campaña (opcional)</label>
+            <select
+              value={form.campania}
+              onChange={handleCampaniaChange}
+              disabled={saving || origen === 'parcela'}
+              className={`w-full px-3 py-2 bg-white/10 border ${errores.campania ? 'border-red-400' : 'border-white/20'} rounded-lg text-white`}
+            >
+              <option value="" className="bg-gray-800">—</option>
+              {campanias.map(c => <option key={c.id} value={c.id} className="bg-gray-800">{c.nombre}</option>)}
+            </select>
+            {errores.campania && <p className="text-red-300 text-sm mt-1">{errores.campania}</p>}
+          </div>
+
+          <div>
+            <label className="block text-emerald-100/90 text-sm mb-1">Parcela (opcional)</label>
+            <select
+              value={form.parcela}
+              onChange={handleParcelaChange}
+              disabled={saving || origen === 'campania'}
+              className={`w-full px-3 py-2 bg-white/10 border ${errores.parcela ? 'border-red-400' : 'border-white/20'} rounded-lg text-white`}
+            >
+              <option value="" className="bg-gray-800">—</option>
+              {parcelas.map(p => <option key={p.id} value={p.id} className="bg-gray-800">{p.nombre}</option>)}
+            </select>
+            {errores.parcela && <p className="text-red-300 text-sm mt-1">{errores.parcela}</p>}
+          </div>
+        </div>
+
+        {/* Observaciones */}
+        <div>
+          <label className="block text-emerald-100/90 text-sm mb-1">Observaciones</label>
+          <textarea
+            rows={4}
+            value={form.observaciones}
+            onChange={(e) => setForm({ ...form, observaciones: e.target.value })}
+            disabled={saving}
+            className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-emerald-200/60 focus:outline-none focus:border-emerald-400"
+            placeholder="Notas adicionales…"
+          />
+        </div>
+
+        {/* Errores generales */}
+        {errores.non_field_errors && <div className="text-red-300 text-sm">{errores.non_field_errors}</div>}
+
+        <div className="flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={() => navigate('/productos-cosechados')}
-            className="bg-white/10 hover:bg-white/20 text-white font-medium py-2 px-6 rounded-lg transition-colors"
+            disabled={saving}
+            className="px-4 py-2 bg-gray-500/20 hover:bg-gray-500/30 text-gray-200 rounded-lg"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={saving}
-            className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 font-medium py-2 px-6 rounded-lg transition-colors flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg inline-flex items-center gap-2"
           >
-            {saving ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-200 mr-2"></div>
-                Guardando...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4 mr-2" />
-                {isEditing ? 'Actualizar' : 'Crear'} Producto
-              </>
-            )}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {isEdit ? 'Guardar cambios' : 'Crear producto'}
           </button>
         </div>
       </form>
@@ -696,4 +502,4 @@ const ProductosCosechadosFormPage = () => {
   );
 };
 
-export default ProductosCosechadosFormPage;
+export default ProductoCosechadoFormPage;

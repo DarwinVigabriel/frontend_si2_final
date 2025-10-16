@@ -1,240 +1,152 @@
+// /src/api/productoCosechadoService.js
 import axios from 'axios';
 
-// Configuración base de axios
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+const API_BASE_URL = 'http://localhost:8000';
 
-// Crear instancia de axios con configuración base
-const apiClient = axios.create({
-  baseURL: API_BASE,
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+// Axios con credenciales + JSON
+export const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
 });
 
-// Interceptor para agregar token de autenticación
-apiClient.interceptors.request.use(
+// ---------- Interceptores (CSRF + auth) ----------
+api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    const skipCsrf =
+      config.url.includes('/api/auth/login/') ||
+      config.url.includes('/api/auth/csrf/');
+
+    if (!skipCsrf) {
+      let csrfToken = localStorage.getItem('csrf_token');
+      if (!csrfToken && typeof document !== 'undefined') {
+        const cookies = document.cookie?.split('; ') || [];
+        const c = cookies.find((r) => r.startsWith('csrftoken='));
+        if (c) csrfToken = c.split('=')[1];
+      }
+      if (csrfToken) config.headers['X-CSRFToken'] = csrfToken;
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (e) => Promise.reject(e)
 );
 
-// Interceptor para manejar errores globalmente
-apiClient.interceptors.response.use(
-  (response) => response,
+api.interceptors.response.use(
+  (res) => {
+    if (res?.data?.csrf_token) {
+      localStorage.setItem('csrf_token', res.data.csrf_token);
+    }
+    if (typeof document !== 'undefined') {
+      const cookies = document.cookie?.split('; ') || [];
+      const c = cookies.find((r) => r.startsWith('csrftoken='));
+      if (c) localStorage.setItem('csrf_token', c.split('=')[1]);
+    }
+    return res;
+  },
   (error) => {
-    if (error.response?.status === 401) {
-      // Redirigir a login si no está autenticado
-      localStorage.removeItem('authToken');
-      window.location.href = '/login';
+    const s = error?.response?.status;
+    if (s === 401 || s === 403) {
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+        localStorage.removeItem('user_data');
+        localStorage.removeItem('csrf_token');
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
 );
 
-export const productoCosechadoService = {
-  // =============================================
-  // CRUD BÁSICO - PRODUCTOS COSECHADOS
-  // =============================================
-
-  /**
-   * Listar productos cosechados con filtros opcionales
-   * @param {Object} filtros - Filtros de búsqueda
-   * @returns Promise
-   */
-  listar: (filtros = {}) => 
-    apiClient.get('/api/productos-cosechados/', { params: filtros }),
-
-  /**
-   * Obtener un producto cosechado por ID
-   * @param {number} id - ID del producto
-   * @returns Promise
-   */
-  obtener: (id) => 
-    apiClient.get(`/api/productos-cosechados/${id}/`),
-
-  /**
-   * Crear un nuevo producto cosechado
-   * @param {Object} data - Datos del producto
-   * @returns Promise
-   */
-  crear: (data) => 
-    apiClient.post('/api/productos-cosechados/', data),
-
-  /**
-   * Actualizar un producto cosechado existente
-   * @param {number} id - ID del producto
-   * @param {Object} data - Datos actualizados
-   * @returns Promise
-   */
-  actualizar: (id, data) => 
-    apiClient.put(`/api/productos-cosechados/${id}/`, data),
-
-  /**
-   * Eliminar un producto cosechado
-   * @param {number} id - ID del producto
-   * @returns Promise
-   */
-  eliminar: (id) => 
-    apiClient.delete(`/api/productos-cosechados/${id}/`),
-
-  // =============================================
-  // ACCIONES ESPECIALES
-  // =============================================
-
-  /**
-   * Vender un producto cosechado
-   * @param {number} id - ID del producto
-   * @param {Object} data - { cantidad_vendida, observaciones }
-   * @returns Promise
-   */
-  vender: (id, data) => 
-    apiClient.post(`/api/productos-cosechados/${id}/vender_producto/`, data),
-
-  /**
-   * Cambiar estado de un producto cosechado
-   * @param {number} id - ID del producto
-   * @param {Object} data - { nuevo_estado, observaciones }
-   * @returns Promise
-   */
-  cambiarEstado: (id, data) => 
-    apiClient.post(`/api/productos-cosechados/${id}/cambiar_estado/`, data),
-
-  // =============================================
-  // CONSULTAS Y UTILIDADES
-  // =============================================
-
-  /**
-   * Obtener lista de estados disponibles
-   * @returns Promise
-   */
-  estadosDisponibles: () => 
-    apiClient.get('/api/productos-cosechados/estados_disponibles/'),
-
-  /**
-   * Obtener productos próximos a vencer
-   * @param {number} diasUmbral - Días umbral para considerar próximo a vencer
-   * @returns Promise
-   */
-  productosPorVencer: (diasUmbral = 30) => 
-    apiClient.get('/api/productos-cosechados/productos_por_vencer/', {
-      params: { dias_umbral: diasUmbral }
-    }),
-
-  /**
-   * Obtener productos que pueden ser vendidos
-   * @returns Promise
-   */
-  productosVendibles: () => 
-    apiClient.get('/api/productos-cosechados/productos_vendibles/'),
-
-  /**
-   * Obtener reporte completo del inventario
-   * @returns Promise
-   */
-  reporteInventario: () => 
-    apiClient.get('/api/productos-cosechados/reporte_inventario/'),
-
-  /**
-   * Validar si un número de lote ya existe
-   * @param {number|string} lote - Número de lote a validar
-   * @returns Promise
-   */
-  validarLote: (lote) => 
-    apiClient.get('/api/productos-cosechados/validar_lote/', {
-      params: { lote }
-    }),
-
-  // =============================================
-  // ENDPOINTS ADICIONALES
-  // =============================================
-
-  /**
-   * Crear producto cosechado de forma rápida
-   * @param {Object} data - Datos mínimos del producto
-   * @returns Promise
-   */
-  crearRapido: (data) => 
-    apiClient.post('/api/productos-cosechados/crear-rapido/', data),
-
-  /**
-   * Búsqueda avanzada con múltiples filtros
-   * @param {Object} filtros - Filtros de búsqueda avanzada
-   * @returns Promise
-   */
-  buscarAvanzado: (filtros = {}) => 
-    apiClient.get('/api/productos-cosechados/buscar-avanzado/', {
-      params: filtros
-    }),
-
-  /**
-   * Reporte de productos cosechados por período
-   * @param {string} fechaDesde - Fecha inicio (YYYY-MM-DD)
-   * @param {string} fechaHasta - Fecha fin (YYYY-MM-DD)
-   * @returns Promise
-   */
-  reportePorPeriodo: (fechaDesde, fechaHasta) => 
-    apiClient.get('/api/productos-cosechados/reporte-por-periodo/', {
-      params: {
-        fecha_desde: fechaDesde,
-        fecha_hasta: fechaHasta
-      }
-    }),
-};
-
-// =============================================
-// CONSTANTES Y CONFIGURACIONES
-// =============================================
-
-/**
- * Opciones de estados para productos cosechados
- */
+// ---------- Constantes de estado ----------
 export const ESTADOS_PRODUCTO = [
   { valor: 'En Almacén', etiqueta: 'En Almacén' },
   { valor: 'Vendido', etiqueta: 'Vendido' },
   { valor: 'Procesado', etiqueta: 'Procesado' },
   { valor: 'Vencido', etiqueta: 'Vencido' },
-  { valor: 'En revision', etiqueta: 'En revisión' }
+  { valor: 'En revision', etiqueta: 'En revisión' }, // sin tilde en valor, como en tu modelo
 ];
 
-/**
- * Filtros disponibles para búsqueda
- */
-export const FILTROS_DISPONIBLES = {
-  fecha_cosecha_desde: { tipo: 'date', label: 'Fecha Cosecha Desde' },
-  fecha_cosecha_hasta: { tipo: 'date', label: 'Fecha Cosecha Hasta' },
-  cultivo_id: { tipo: 'number', label: 'Cultivo' },
-  campania_id: { tipo: 'number', label: 'Campaña' },
-  parcela_id: { tipo: 'number', label: 'Parcela' },
-  estado: { tipo: 'select', label: 'Estado', opciones: ESTADOS_PRODUCTO },
-  lote: { tipo: 'number', label: 'Lote' },
-  calidad: { tipo: 'text', label: 'Calidad' },
-  labor_id: { tipo: 'number', label: 'Labor' },
-  socio_id: { tipo: 'number', label: 'Socio' },
-  especie: { tipo: 'text', label: 'Especie' },
-  unidad_medida: { tipo: 'text', label: 'Unidad Medida' },
-  ubicacion_almacen: { tipo: 'text', label: 'Ubicación Almacén' }
+// Alias para compatibilidad con código existente
+export const ESTADOS_PRODUCTO_FALLBACK = ESTADOS_PRODUCTO;
+
+// Normalizador por si el backend devuelve otros formatos
+const normalizeChoices = (raw, fallback) => {
+  try {
+    if (!Array.isArray(raw) || raw.length === 0) return fallback;
+    const f = raw[0];
+    if (Array.isArray(f)) {
+      return raw.map(([v, l]) => ({ valor: String(v), etiqueta: l ?? String(v) }));
+    }
+    if (typeof f === 'object' && f) {
+      return raw
+        .map((o) => ({
+          valor: String(o.valor ?? o.value ?? o.key ?? ''),
+          etiqueta: String(o.etiqueta ?? o.label ?? o.value ?? o.key ?? ''),
+        }))
+        .filter((x) => x.valor);
+    }
+    if (typeof f === 'string') {
+      return raw.map((s) => ({ valor: s, etiqueta: s }));
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
 };
 
-/**
- * Campos para creación rápida
- */
-export const CAMPOS_CREACION_RAPIDA = [
-  'fecha_cosecha',
-  'cantidad',
-  'unidad_medida',
-  'calidad',
-  'cultivo',
-  'labor',
-  'lote',
-  'ubicacion_almacen'
-];
+const BASE = '/api/productos-cosechados/';
+
+const productoCosechadoService = {
+  // Listar (acepta filtros/paginación DRF)
+  async listar(params = {}) {
+    const res = await api.get(BASE, { params });
+    return res.data;
+  },
+
+  async getProductoById(id) {
+    const res = await api.get(`${BASE}${id}/`);
+    return res.data;
+  },
+
+  async crearProducto(data) {
+    const res = await api.post(BASE, data);
+    return res.data;
+  },
+
+  async updateProducto(id, data) {
+    const res = await api.put(`${BASE}${id}/`, data);
+    return res.data;
+  },
+
+  async patchProducto(id, data) {
+    const res = await api.patch(`${BASE}${id}/`, data);
+    return res.data;
+  },
+
+  async eliminar(id) {
+    const res = await api.delete(`${BASE}${id}/`);
+    return res.data;
+  },
+
+  // Catálogo de estados (si tu backend expone /estados/)
+async getEstadosDisponibles() {
+  return ESTADOS_PRODUCTO; // usamos el fallback directamente
+},
+
+  // Sinónimo por si en algunos sitios usas otro nombre
+  async estadosDisponibles() {
+    return this.getEstadosDisponibles();
+  },
+
+  // Acciones de negocio
+  async cambiarEstado(id, payload /* { nuevo_estado, observaciones } */) {
+    const res = await api.post(`${BASE}${id}/cambiar_estado/`, payload);
+    return res.data;
+  },
+
+  async vender(id, payload /* { cantidad_vendida, observaciones } */) {
+    const res = await api.post(`${BASE}${id}/vender/`, payload);
+    return res.data;
+  },
+};
 
 export default productoCosechadoService;

@@ -1,243 +1,227 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Package, 
-  Search, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Eye, 
-  AlertTriangle, 
-  Filter, 
-  Calendar, 
-  DollarSign, 
+import {
+  Package,
+  Search,
+  Plus,
+  Edit,
+  Trash2,
+  Eye,
+  AlertTriangle,
+  Filter,
+  DollarSign,
   Warehouse,
-  TrendingUp,
-  BarChart3,
   RefreshCw,
-  CheckCircle,
-  XCircle
+  BarChart3,
 } from 'lucide-react';
-import { productoCosechadoService, ESTADOS_PRODUCTO } from '../api/productoCosechadoService';
+import productoCosechadoService, {
+  ESTADOS_PRODUCTO_FALLBACK,
+} from '../api/productoCosechadoService';
 
-const ProductosCosechadosPage = () => {
+// ✅ Formato de fecha seguro
+const formatDate = (s) => {
+  if (!s) return 'N/A';
+  try {
+    return new Date(s).toLocaleDateString('es-ES');
+  } catch {
+    return s;
+  }
+};
+
+// ✅ Colores por estado
+const getEstadoColor = (estado) => {
+  switch (estado) {
+    case 'En Almacén': return 'bg-green-500/20 text-green-200';
+    case 'Vendido': return 'bg-blue-500/20 text-blue-200';
+    case 'Procesado': return 'bg-purple-500/20 text-purple-200';
+    case 'Vencido': return 'bg-red-500/20 text-red-200';
+    case 'En revision': return 'bg-yellow-500/20 text-yellow-200';
+    default: return 'bg-gray-500/20 text-gray-200';
+  }
+};
+
+// ✅ Íconos por estado
+const getEstadoIcon = (estado) => {
+  switch (estado) {
+    case 'Vencido': return <AlertTriangle className="w-4 h-4" />;
+    case 'En Almacén': return <Warehouse className="w-4 h-4" />;
+    case 'Vendido': return <DollarSign className="w-4 h-4" />;
+    case 'Procesado':
+    case 'En revision': return <RefreshCw className="w-4 h-4" />;
+    default: return null;
+  }
+};
+
+const ProductoCosechadoPage = () => {
   const navigate = useNavigate();
+
   const [productos, setProductos] = useState([]);
+  const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [estadosChoices, setEstadosChoices] = useState(ESTADOS_PRODUCTO_FALLBACK);
+
+  // paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  // filtros del backend
   const [filtros, setFiltros] = useState({
     estado: '',
-    campania: '',
-    parcela: '',
-    cultivo: '',
+    campania_id: '',
+    parcela_id: '',
+    cultivo_id: '',
     fecha_desde: '',
-    fecha_hasta: ''
+    fecha_hasta: '',
+    ordering: '-fecha_cosecha,-creado_en',
   });
-  const [showFilters, setShowFilters] = useState(false);
-  const [estados, setEstados] = useState([]);
 
+  // ✅ Cargar catálogo de estados (usa fallback si la ruta /estados no existe)
   useEffect(() => {
-    cargarProductos();
-    cargarEstados();
+    (async () => {
+      try {
+        const est = await productoCosechadoService.getEstadosDisponibles();
+        setEstadosChoices(est);
+      } catch {
+        setEstadosChoices(ESTADOS_PRODUCTO_FALLBACK);
+      }
+    })();
   }, []);
 
-  const cargarProductos = async () => {
+  // ✅ Función principal para cargar los productos cosechados
+  const cargar = async (page = 1) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const response = await productoCosechadoService.listar();
-      setProductos(response.data.results || response.data);
-    } catch (error) {
-      console.error('Error al cargar productos cosechados:', error);
-      // Fallback a datos simulados si hay error
-      setProductos([
-        {
-          id: 1,
-          fecha_cosecha: '2024-01-15',
-          cantidad: '100.50',
-          unidad_medida: 'kg',
-          calidad: 'Premium',
-          cultivo: 1,
-          cultivo_especie: 'Manzana',
-          cultivo_variedad: 'Gala',
-          labor: 1,
-          labor_nombre: 'Cosecha Manual',
-          estado: 'En Almacén',
-          lote: 123.45,
-          ubicacion_almacen: 'Almacén A - Estante 5',
-          campania: 1,
-          campania_nombre: 'Campaña Verano 2024',
-          parcela: null,
-          parcela_nombre: null,
-          socio_nombre: 'Juan Pérez',
-          observaciones: 'Producto de primera calidad',
-          creado_en: '2024-01-15T10:30:00Z',
-          origen_display: 'Campaña: Campaña Verano 2024',
-          dias_en_almacen: 15,
-          esta_proximo_vencer: false,
-          puede_vender: true
-        },
-        {
-          id: 2,
-          fecha_cosecha: '2024-01-10',
-          cantidad: '75.25',
-          unidad_medida: 'kg',
-          calidad: 'Estándar',
-          cultivo: 2,
-          cultivo_especie: 'Naranja',
-          cultivo_variedad: 'Valencia',
-          labor: 2,
-          labor_nombre: 'Cosecha Mecánica',
-          estado: 'Vendido',
-          lote: 123.46,
-          ubicacion_almacen: 'Almacén B - Estante 3',
-          campania: null,
-          campania_nombre: null,
-          parcela: 1,
-          parcela_nombre: 'Parcela Norte',
-          socio_nombre: 'María García',
-          observaciones: 'Vendido a mercado local',
-          creado_en: '2024-01-10T08:15:00Z',
-          origen_display: 'Parcela: Parcela Norte',
-          dias_en_almacen: 20,
-          esta_proximo_vencer: false,
-          puede_vender: false
-        }
-      ]);
+      const params = {
+        page,
+        page_size: pageSize,
+        ordering: filtros.ordering,
+      };
+
+      if (filtros.estado) params.estado = filtros.estado;
+      if (filtros.campania_id) params.campania_id = filtros.campania_id;
+      if (filtros.parcela_id) params.parcela_id = filtros.parcela_id;
+      if (filtros.cultivo_id) params.cultivo_id = filtros.cultivo_id;
+      if (filtros.fecha_desde) params.fecha_desde = filtros.fecha_desde;
+      if (filtros.fecha_hasta) params.fecha_hasta = filtros.fecha_hasta;
+
+      // ⚠️ Usa listar() en lugar de getProductos() (más consistente con tu servicio actual)
+      const data = await productoCosechadoService.listar(params);
+
+      const rows = data.results || data || [];
+      setProductos(rows);
+      setCount(data.count ?? rows.length);
+      setCurrentPage(page);
+    } catch (e) {
+      console.error('Error al cargar productos cosechados:', e);
+      setProductos([]);
+      setCount(0);
     } finally {
       setLoading(false);
     }
   };
 
-  const cargarEstados = async () => {
-    try {
-      const response = await productoCosechadoService.estadosDisponibles();
-      setEstados(response.data);
-    } catch (error) {
-      console.error('Error al cargar estados:', error);
-      setEstados(ESTADOS_PRODUCTO);
-    }
+  useEffect(() => {
+    cargar(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageSize]);
+
+  // ✅ Filtrado local (buscador)
+  const filtered = useMemo(() => {
+    if (!searchTerm) return productos;
+    const q = searchTerm.toLowerCase();
+    return productos.filter((p) => {
+      const blob = [
+        p.cultivo_especie,
+        p.cultivo_variedad,
+        p.estado,
+        p.origen_display,
+        p.campania_nombre,
+        p.parcela_nombre,
+        p.socio_nombre,
+        p.ubicacion_almacen,
+        p.lote,
+        p.calidad,
+        p.observaciones,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return blob.includes(q);
+    });
+  }, [productos, searchTerm]);
+
+  // ✅ Estadísticas rápidas
+  const stats = useMemo(() => {
+    const enAlmacen = filtered.filter((p) => p.estado === 'En Almacén').length;
+    const vendidos = filtered.filter((p) => p.estado === 'Vendido').length;
+    const proximos = filtered.filter((p) => p.esta_proximo_vencer).length;
+    const totalCantidad = filtered.reduce((acc, p) => acc + parseFloat(p.cantidad || 0), 0);
+    return { enAlmacen, vendidos, proximos, totalCantidad };
+  }, [filtered]);
+
+  // ✅ Acciones
+  const aplicar = () => cargar(1);
+  const limpiar = () => {
+    setFiltros({
+      estado: '',
+      campania_id: '',
+      parcela_id: '',
+      cultivo_id: '',
+      fecha_desde: '',
+      fecha_hasta: '',
+      ordering: '-fecha_cosecha,-creado_en',
+    });
+    setSearchTerm('');
+    cargar(1);
   };
 
-  const handleVenderProducto = async (id) => {
+  const vender = async (id) => {
     const cantidad = prompt('Ingrese la cantidad a vender:');
-    if (cantidad && !isNaN(cantidad)) {
-      try {
-        await productoCosechadoService.vender(id, {
-          cantidad_vendida: parseFloat(cantidad),
-          observaciones: 'Venta realizada desde el sistema'
-        });
-        await cargarProductos();
-      } catch (error) {
-        console.error('Error al vender producto:', error);
-        alert('Error al vender producto: ' + (error.response?.data?.message || error.message));
-      }
+    if (!cantidad || isNaN(Number(cantidad))) return;
+    try {
+      await productoCosechadoService.vender(id, {
+        cantidad_vendida: Number(cantidad),
+        observaciones: 'Venta desde la lista',
+      });
+      await cargar(currentPage);
+    } catch (e) {
+      alert('Error al vender: ' + (e?.response?.data?.detail || e.message));
     }
   };
 
-  const handleCambiarEstado = async (id, estadoActual) => {
-    const nuevoEstado = prompt(`Cambiar estado (actual: ${estadoActual}). Nuevo estado:`, estadoActual);
-    if (nuevoEstado && nuevoEstado !== estadoActual) {
-      try {
-        await productoCosechadoService.cambiarEstado(id, {
-          nuevo_estado: nuevoEstado,
-          observaciones: 'Cambio de estado desde el sistema'
-        });
-        await cargarProductos();
-      } catch (error) {
-        console.error('Error al cambiar estado:', error);
-        alert('Error al cambiar estado: ' + (error.response?.data?.message || error.message));
-      }
+  const cambiarEstado = async (id, estadoActual) => {
+    const nuevo = prompt(`Estado actual: ${estadoActual}\nNuevo estado:`, estadoActual);
+    if (!nuevo || nuevo === estadoActual) return;
+    try {
+      await productoCosechadoService.cambiarEstado(id, {
+        nuevo_estado: nuevo,
+        observaciones: 'Cambio manual desde listado',
+      });
+      await cargar(currentPage);
+    } catch (e) {
+      alert('Error al cambiar estado: ' + (e?.response?.data?.detail || e.message));
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('¿Está seguro de eliminar este producto cosechado?')) {
-      try {
-        await productoCosechadoService.eliminar(id);
-        await cargarProductos();
-      } catch (error) {
-        console.error('Error al eliminar producto:', error);
-        alert('Error al eliminar producto');
-      }
+  const eliminar = async (id) => {
+    if (!window.confirm('¿Eliminar este producto cosechado?')) return;
+    try {
+      await productoCosechadoService.eliminar(id);
+      await cargar(currentPage);
+    } catch (e) {
+      alert('No se pudo eliminar: ' + (e?.response?.data?.detail || e.message));
     }
   };
 
-  const getEstadoColor = (estado) => {
-    switch (estado) {
-      case 'En Almacén': return 'bg-green-500/20 text-green-200';
-      case 'Vendido': return 'bg-blue-500/20 text-blue-200';
-      case 'Procesado': return 'bg-purple-500/20 text-purple-200';
-      case 'Vencido': return 'bg-red-500/20 text-red-200';
-      case 'En revision': return 'bg-yellow-500/20 text-yellow-200';
-      default: return 'bg-gray-500/20 text-gray-200';
-    }
-  };
+  // ✅ Valores únicos para filtros
+  const campaniasUnicas = [...new Set(productos.map((p) => p.campania_nombre).filter(Boolean))];
+  const parcelasUnicas = [...new Set(productos.map((p) => p.parcela_nombre).filter(Boolean))];
+  const cultivosUnicos = [...new Set(productos.map((p) => p.cultivo_especie).filter(Boolean))];
 
-  const getEstadoIcon = (estado) => {
-    switch (estado) {
-      case 'Vencido': return <AlertTriangle className="w-4 h-4" />;
-      case 'En Almacén': return <Warehouse className="w-4 h-4" />;
-      case 'Vendido': return <DollarSign className="w-4 h-4" />;
-      case 'Procesado': return <CheckCircle className="w-4 h-4" />;
-      case 'En revision': return <RefreshCw className="w-4 h-4" />;
-      default: return null;
-    }
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('es-ES', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('es-ES');
-  };
-
-  const filteredProductos = productos.filter(producto => {
-    const matchesSearch = searchTerm === '' ||
-      producto.cultivo_especie?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      producto.cultivo_variedad?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      producto.lote?.toString().includes(searchTerm) ||
-      producto.ubicacion_almacen?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      producto.socio_nombre?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesEstado = filtros.estado === '' || producto.estado === filtros.estado;
-    const matchesCampania = filtros.campania === '' || producto.campania_nombre === filtros.campania;
-    const matchesParcela = filtros.parcela === '' || producto.parcela_nombre === filtros.parcela;
-    const matchesCultivo = filtros.cultivo === '' || producto.cultivo_especie === filtros.cultivo;
-
-    // Filtro por fecha
-    let matchesFecha = true;
-    if (filtros.fecha_desde) {
-      matchesFecha = matchesFecha && producto.fecha_cosecha >= filtros.fecha_desde;
-    }
-    if (filtros.fecha_hasta) {
-      matchesFecha = matchesFecha && producto.fecha_cosecha <= filtros.fecha_hasta;
-    }
-
-    return matchesSearch && matchesEstado && matchesCampania && matchesParcela && matchesCultivo && matchesFecha;
-  });
-
-  // Obtener valores únicos para los filtros
-  const campaniasUnicas = [...new Set(productos.map(p => p.campania_nombre).filter(Boolean))];
-  const parcelasUnicas = [...new Set(productos.map(p => p.parcela_nombre).filter(Boolean))];
-  const cultivosUnicos = [...new Set(productos.map(p => p.cultivo_especie).filter(Boolean))];
-
-  const getStats = () => {
-    const enAlmacen = productos.filter(p => p.estado === 'En Almacén').length;
-    const vendidos = productos.filter(p => p.estado === 'Vendido').length;
-    const proximosVencer = productos.filter(p => p.esta_proximo_vencer).length;
-    const totalCantidad = productos.reduce((sum, p) => sum + parseFloat(p.cantidad || 0), 0);
-
-    return { enAlmacen, vendidos, proximosVencer, totalCantidad };
-  };
-
-  const stats = getStats();
-
-  if (loading) {
+  // ✅ Loader
+  if (loading && productos.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-emerald-500"></div>
@@ -245,20 +229,27 @@ const ProductosCosechadosPage = () => {
     );
   }
 
+  const totalPages = Math.max(1, Math.ceil(count / pageSize));
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Productos Cosechados</h1>
-          <p className="text-emerald-100/80 mt-1">
-            Gestión de productos cosechados por campaña y parcela
-          </p>
+          <p className="text-emerald-100/80 mt-1">Gestión de productos cosechados por campaña/parcela</p>
         </div>
         <div className="flex items-center space-x-3 mt-4 sm:mt-0">
           <button
+            onClick={() => cargar(currentPage)}
+            className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 font-medium py-2 px-4 rounded-lg flex items-center space-x-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Actualizar</span>
+          </button>
+          <button
             onClick={() => navigate('/productos-cosechados/nuevo')}
-            className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 font-medium py-2 px-4 rounded-lg transition-colors flex items-center space-x-2"
+            className="bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-2 px-4 rounded-lg flex items-center space-x-2"
           >
             <Plus className="w-4 h-4" />
             <span>Nuevo Producto</span>
@@ -266,282 +257,244 @@ const ProductosCosechadosPage = () => {
         </div>
       </div>
 
-      {/* Search and Filters */}
+      {/* Search & Filters */}
       <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6 mb-6">
-        <div className="relative">
+        <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-emerald-400 w-5 h-5" />
           <input
             type="text"
-            placeholder="Buscar productos por cultivo, lote, ubicación o socio..."
+            placeholder="Buscar por cultivo, estado, origen, socio, ubicación o notas…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-emerald-200/60 focus:outline-none focus:border-emerald-400 transition-colors"
+            onKeyDown={(e) => e.key === 'Enter' && aplicar()}
+            className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-emerald-200/60 focus:outline-none focus:border-emerald-400"
           />
         </div>
 
-        <div className="flex items-center justify-between mt-4">
+        <div className="flex items-center justify-between">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center space-x-2 px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 font-medium rounded-lg transition-colors"
+            className="flex items-center space-x-2 px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 font-medium rounded-lg"
           >
             <Filter className="w-4 h-4" />
             <span>Filtros Avanzados</span>
           </button>
+
+          <div className="flex items-center space-x-4">
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-400"
+            >
+              {[10, 25, 50, 100].map((n) => (
+                <option key={n} value={n} className="bg-gray-800">
+                  {n} por página
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {showFilters && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 pt-4 border-t border-white/20 mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4 pt-4 border-t border-white/20 mt-4">
+            {/* Estado */}
             <select
               value={filtros.estado}
-              onChange={(e) => setFiltros({...filtros, estado: e.target.value})}
-              className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-400 transition-colors"
+              onChange={(e) => setFiltros({ ...filtros, estado: e.target.value })}
+              className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white"
             >
-              <option value="" className="bg-gray-800">Todos los Estados</option>
-              {estados.map(estado => (
-                <option key={estado.valor} value={estado.valor} className="bg-gray-800">
-                  {estado.etiqueta}
+              <option value="">Todos los Estados</option>
+              {estadosChoices.map((e) => (
+                <option key={e.valor} value={e.valor} className="bg-gray-800">
+                  {e.etiqueta}
                 </option>
               ))}
             </select>
 
+            {/* Campaña */}
             <select
-              value={filtros.campania}
-              onChange={(e) => setFiltros({...filtros, campania: e.target.value})}
-              className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-400 transition-colors"
+              value={filtros.campania_id}
+              onChange={(e) => setFiltros({ ...filtros, campania_id: e.target.value })}
+              className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white"
             >
-              <option value="" className="bg-gray-800">Todas las Campañas</option>
-              {campaniasUnicas.map(campania => (
-                <option key={campania} value={campania} className="bg-gray-800">{campania}</option>
+              <option value="">Todas las Campañas</option>
+              {campaniasUnicas.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
               ))}
             </select>
 
+            {/* Parcela */}
             <select
-              value={filtros.parcela}
-              onChange={(e) => setFiltros({...filtros, parcela: e.target.value})}
-              className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-400 transition-colors"
+              value={filtros.parcela_id}
+              onChange={(e) => setFiltros({ ...filtros, parcela_id: e.target.value })}
+              className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white"
             >
-              <option value="" className="bg-gray-800">Todas las Parcelas</option>
-              {parcelasUnicas.map(parcela => (
-                <option key={parcela} value={parcela} className="bg-gray-800">{parcela}</option>
+              <option value="">Todas las Parcelas</option>
+              {parcelasUnicas.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
               ))}
             </select>
 
+            {/* Cultivo */}
             <select
-              value={filtros.cultivo}
-              onChange={(e) => setFiltros({...filtros, cultivo: e.target.value})}
-              className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-400 transition-colors"
+              value={filtros.cultivo_id}
+              onChange={(e) => setFiltros({ ...filtros, cultivo_id: e.target.value })}
+              className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white"
             >
-              <option value="" className="bg-gray-800">Todos los Cultivos</option>
-              {cultivosUnicos.map(cultivo => (
-                <option key={cultivo} value={cultivo} className="bg-gray-800">{cultivo}</option>
+              <option value="">Todos los Cultivos</option>
+              {cultivosUnicos.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
               ))}
             </select>
 
             <input
               type="date"
               value={filtros.fecha_desde}
-              onChange={(e) => setFiltros({...filtros, fecha_desde: e.target.value})}
-              className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-400 transition-colors"
-              placeholder="Fecha desde"
+              onChange={(e) => setFiltros({ ...filtros, fecha_desde: e.target.value })}
+              className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white"
             />
-
             <input
               type="date"
               value={filtros.fecha_hasta}
-              onChange={(e) => setFiltros({...filtros, fecha_hasta: e.target.value})}
-              className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-400 transition-colors"
-              placeholder="Fecha hasta"
+              onChange={(e) => setFiltros({ ...filtros, fecha_hasta: e.target.value })}
+              className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white"
             />
 
-            <div className="md:col-span-2 lg:col-span-6 flex justify-end">
+            <div className="md:col-span-6 flex gap-2">
               <button
-                onClick={() => setFiltros({
-                  estado: '', campania: '', parcela: '', cultivo: '', fecha_desde: '', fecha_hasta: ''
-                })}
-                className="px-4 py-2 bg-gray-500/20 hover:bg-gray-500/30 text-gray-200 font-medium rounded-lg transition-colors"
+                onClick={aplicar}
+                className="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-lg"
               >
-                Limpiar Filtros
+                Aplicar
+              </button>
+              <button
+                onClick={limpiar}
+                className="flex-1 px-4 py-2 bg-gray-500/20 hover:bg-gray-500/30 text-gray-200 font-medium rounded-lg"
+              >
+                Limpiar
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-emerald-200/80 text-sm font-medium">Total Productos</p>
-              <p className="text-2xl font-bold text-white">{productos.length}</p>
-            </div>
-            <Package className="w-8 h-8 text-emerald-400" />
-          </div>
-        </div>
-
-        <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-emerald-200/80 text-sm font-medium">En Almacén</p>
-              <p className="text-2xl font-bold text-green-200">{stats.enAlmacen}</p>
-            </div>
-            <Warehouse className="w-8 h-8 text-green-400" />
-          </div>
-        </div>
-
-        <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-emerald-200/80 text-sm font-medium">Próximos a Vencer</p>
-              <p className="text-2xl font-bold text-yellow-200">{stats.proximosVencer}</p>
-            </div>
-            <AlertTriangle className="w-8 h-8 text-yellow-400" />
-          </div>
-        </div>
-
-        <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-emerald-200/80 text-sm font-medium">Cantidad Total</p>
-              <p className="text-2xl font-bold text-blue-200">{stats.totalCantidad.toFixed(2)}</p>
-            </div>
-            <TrendingUp className="w-8 h-8 text-blue-400" />
-          </div>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl overflow-hidden">
+      {/* Tabla */}
+      <div className="bg-white/10 border border-white/20 rounded-xl overflow-hidden">
         <div className="p-6 border-b border-white/20">
-          <h2 className="text-xl font-semibold text-white flex items-center space-x-2">
+          <h2 className="text-xl font-semibold text-white flex items-center gap-2">
             <BarChart3 className="w-5 h-5" />
-            <span>Inventario de Productos Cosechados ({filteredProductos.length})</span>
+            <span>Inventario ({count} total)</span>
           </h2>
         </div>
 
+        {/* Tabla */}
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-white/5">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">
-                  Producto
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">
-                  Origen
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">
-                  Cantidad
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">
-                  Fecha Cosecha
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">
-                  Lote / Ubicación
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">
-                  Estado
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">
-                  Acciones
-                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase">Producto</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase">Origen</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase">Cantidad</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase">Fecha</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase">Lote / Ubicación</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase">Estado</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase">Acciones</th>
               </tr>
             </thead>
+
             <tbody className="divide-y divide-white/10">
-              {filteredProductos.map((producto) => (
-                <tr key={producto.id} className="hover:bg-white/5 transition-colors">
+              {filtered.map((p) => (
+                <tr key={p.id} className="hover:bg-white/5">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-white font-semibold">
-                        {producto.cultivo_especie}
-                      </div>
-                      {producto.cultivo_variedad && (
-                        <div className="text-emerald-200/60 text-sm">
-                          Variedad: {producto.cultivo_variedad}
-                        </div>
-                      )}
-                      <div className="text-emerald-200/60 text-sm">
-                        Calidad: {producto.calidad}
-                      </div>
-                      <div className="text-emerald-200/60 text-sm">
-                        Socio: {producto.socio_nombre}
-                      </div>
-                    </div>
+                    <div className="text-white font-semibold">{p.cultivo_especie}</div>
+                    {p.cultivo_variedad && (
+                      <div className="text-emerald-200/60 text-sm">Variedad: {p.cultivo_variedad}</div>
+                    )}
+                    <div className="text-emerald-200/60 text-sm">Calidad: {p.calidad}</div>
+                    {p.socio_nombre && <div className="text-emerald-200/60 text-sm">Socio: {p.socio_nombre}</div>}
                   </td>
+
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-white font-medium">
-                      {producto.origen_display}
+                      {p.origen_display || p.campania_nombre || p.parcela_nombre || '—'}
                     </div>
-                    <div className="text-emerald-200/60 text-sm">
-                      Labor: {producto.labor_nombre}
-                    </div>
+                    {p.labor_nombre && (
+                      <div className="text-emerald-200/60 text-sm">Labor: {p.labor_nombre}</div>
+                    )}
                   </td>
+
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-white font-medium">
-                      {producto.cantidad} {producto.unidad_medida}
+                      {p.cantidad} {p.unidad_medida}
                     </div>
-                    <div className="text-emerald-200/60 text-sm">
-                      {producto.dias_en_almacen} días en almacén
-                    </div>
+                    {typeof p.dias_en_almacen === 'number' && (
+                      <div className="text-emerald-200/60 text-sm">{p.dias_en_almacen} días en almacén</div>
+                    )}
                   </td>
+
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-white font-medium">
-                      {formatDate(producto.fecha_cosecha)}
-                    </div>
-                    <div className="text-emerald-200/60 text-sm">
-                      {producto.esta_proximo_vencer && (
-                        <span className="text-yellow-300">Próximo a vencer</span>
-                      )}
-                    </div>
+                    <div className="text-white font-medium">{formatDate(p.fecha_cosecha)}</div>
+                    {p.esta_proximo_vencer && (
+                      <div className="text-yellow-300 text-sm">Próximo a vencer</div>
+                    )}
                   </td>
+
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-white font-medium">
-                      Lote: {producto.lote}
-                    </div>
-                    <div className="text-emerald-200/60 text-sm">
-                      {producto.ubicacion_almacen}
-                    </div>
+                    <div className="text-white font-medium">Lote: {p.lote}</div>
+                    <div className="text-emerald-200/60 text-sm">{p.ubicacion_almacen}</div>
                   </td>
+
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${getEstadoColor(producto.estado)}`}>
-                      {getEstadoIcon(producto.estado)}
-                      <span className="ml-1">{producto.estado}</span>
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${getEstadoColor(
+                        p.estado
+                      )}`}
+                    >
+                      {getEstadoIcon(p.estado)} <span className="ml-1">{p.estado}</span>
                     </span>
                   </td>
+
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={() => navigate(`/productos-cosechados/${producto.id}`)}
-                        className="text-blue-300 hover:text-blue-200 transition-colors"
-                        title="Ver detalles"
+                        onClick={() => navigate(`/productos-cosechados/${p.id}`)}
+                        className="text-blue-300 hover:text-blue-200"
+                        title="Ver"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => navigate(`/productos-cosechados/${producto.id}/editar`)}
-                        className="text-indigo-300 hover:text-indigo-200 transition-colors"
+                        onClick={() => navigate(`/productos-cosechados/editar/${p.id}`)}
+                        className="text-indigo-300 hover:text-indigo-200"
                         title="Editar"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
-                      {producto.puede_vender && (
+                      {p.puede_vender && (
                         <button
-                          onClick={() => handleVenderProducto(producto.id)}
-                          className="text-green-300 hover:text-green-200 transition-colors"
-                          title="Vender producto"
+                          onClick={() => vender(p.id)}
+                          className="text-green-300 hover:text-green-200"
+                          title="Vender"
                         >
                           <DollarSign className="w-4 h-4" />
                         </button>
                       )}
                       <button
-                        onClick={() => handleCambiarEstado(producto.id, producto.estado)}
-                        className="text-orange-300 hover:text-orange-200 transition-colors"
+                        onClick={() => cambiarEstado(p.id, p.estado)}
+                        className="text-orange-300 hover:text-orange-200"
                         title="Cambiar estado"
                       >
                         <RefreshCw className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleDelete(producto.id)}
-                        className="text-red-300 hover:text-red-200 transition-colors"
+                        onClick={() => eliminar(p.id)}
+                        className="text-red-300 hover:text-red-200"
                         title="Eliminar"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -553,18 +506,9 @@ const ProductosCosechadosPage = () => {
             </tbody>
           </table>
         </div>
-
-        {filteredProductos.length === 0 && (
-          <div className="text-center py-12">
-            <Package className="w-12 h-12 text-emerald-400/50 mx-auto mb-4" />
-            <p className="text-emerald-100/60">
-              {searchTerm ? 'No se encontraron productos con ese criterio de búsqueda' : 'No hay productos cosechados registrados'}
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );
 };
 
-export default ProductosCosechadosPage;
+export default ProductoCosechadoPage;

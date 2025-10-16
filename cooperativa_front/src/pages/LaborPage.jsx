@@ -1,236 +1,126 @@
 // src/pages/LaborPage.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Tractor, 
-  Search, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Eye, 
-  Filter, 
+import {
+  Tractor,
+  Search,
+  Plus,
+  Edit,
+  Trash2,
+  Eye,
+  Filter,
   Calendar,
-  Clock,
-  DollarSign,
-  MapPin,
-  Package,
-  User,
   RefreshCw,
-  AlertTriangle,
   CheckCircle,
   PlayCircle,
-  XCircle
+  XCircle,
 } from 'lucide-react';
 import laborService from '../api/laborService';
-import { 
-  getEstadoBadgeVariant, 
-  getTipoLaborBadgeVariant, 
-  formatDuracion, 
-  formatMoneda 
-} from '../utils/laborUtils';
+import { campaignService } from '../api/campaignService';
+import { parcelaService } from '../api/parcelaService';
+import { getEstadoBadgeVariant, getTipoLaborBadgeVariant } from '../utils/laborUtils';
+
+// ---- helpers ----
+const formatDate = (s) => (s ? new Date(s).toLocaleDateString('es-ES') : '—');
+
+const normalizeChoices = (raw, fallback) => {
+  if (!raw || !Array.isArray(raw) || raw.length === 0) return fallback;
+  const first = raw[0];
+
+  // [[value, label]]
+  if (Array.isArray(first)) {
+    return raw.map(([value, label]) => ({
+      valor: String(value),
+      etiqueta: label ?? String(value),
+    }));
+  }
+  // [{valor, etiqueta}] u otras claves comunes
+  if (typeof first === 'object' && first !== null) {
+    return raw
+      .map((o) => ({
+        valor: String(o.valor ?? o.value ?? o.key ?? ''),
+        etiqueta: String(o.etiqueta ?? o.label ?? o.value ?? o.key ?? ''),
+      }))
+      .filter((x) => x.valor);
+  }
+  // ['SIEMBRA', 'COSECHA', ...]
+  if (typeof first === 'string') {
+    return raw.map((s) => ({ valor: String(s), etiqueta: String(s) }));
+  }
+  return fallback;
+};
+
+const TIPOS_LABOR_FALLBACK = [
+  { valor: 'SIEMBRA', etiqueta: 'Siembra' },
+  { valor: 'RIEGO', etiqueta: 'Riego' },
+  { valor: 'FERTILIZACION', etiqueta: 'Fertilización' },
+  { valor: 'COSECHA', etiqueta: 'Cosecha' },
+  { valor: 'FUMIGACION', etiqueta: 'Fumigación' },
+];
+const ESTADOS_FALLBACK = [
+  { valor: 'PLANIFICADA', etiqueta: 'Planificada' },
+  { valor: 'EN_PROCESO', etiqueta: 'En Proceso' },
+  { valor: 'COMPLETADA', etiqueta: 'Completada' },
+  { valor: 'CANCELADA', etiqueta: 'Cancelada' },
+];
 
 const LaborPage = () => {
   const navigate = useNavigate();
+
+  // data
   const [labores, setLabores] = useState([]);
+  const [count, setCount] = useState(0);
+
+  // ui
   const [loading, setLoading] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const totalPages = Math.max(1, Math.ceil(count / pageSize));
+
+  // filtros (map a backend)
   const [filtros, setFiltros] = useState({
     estado: '',
-    tipo: '',
-    campana: '',
-    parcela: ''
-  });
-  const [showFilters, setShowFilters] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
-  const [stats, setStats] = useState({
-    total: 0,
-    planificadas: 0,
-    enProceso: 0,
-    completadas: 0,
-    canceladas: 0
+    labor_tipo: '',
+    campania_id: '',
+    parcela_id: '',
+    fecha_desde: '',
+    fecha_hasta: '',
+    ordering: '-fecha_labor,-creado_en',
   });
 
-  // Cargar labores
-  const cargarLabores = async (page = 1) => {
-    try {
-      setLoading(true);
-      const params = {
-        page,
-        page_size: pageSize,
-        ...laborService.buildSearchParams(filtros)
-      };
+  // catálogos
+  const [tiposLabor, setTiposLabor] = useState(TIPOS_LABOR_FALLBACK);
+  const [estadosLabor, setEstadosLabor] = useState(ESTADOS_FALLBACK);
+  const [campanias, setCampanias] = useState([]);
+  const [parcelas, setParcelas] = useState([]);
 
-      if (searchTerm) {
-        // Búsqueda simple por texto
-        params.search = searchTerm;
-      }
+  // para pintar etiqueta de tipo si no viene del backend
+  const tipoMap = useMemo(
+    () => Object.fromEntries(tiposLabor.map((t) => [t.valor, t.etiqueta])),
+    [tiposLabor]
+  );
 
-      const response = await laborService.getLabores(params);
-      setLabores(response.results || response);
-      setTotalPages(Math.ceil(response.count / pageSize));
-      setCurrentPage(page);
-      calcularEstadisticas(response.results || response);
-    } catch (error) {
-      console.error('Error al cargar labores:', error);
-      // Fallback a datos simulados si hay error
-      const datosSimulados = [
-        {
-          id: 1,
-          fecha_labor: '2024-01-15',
-          labor: 'SIEMBRA',
-          tipo_labor_display: 'Siembra',
-          estado: 'COMPLETADA',
-          campaña_nombre: 'Campaña Maíz 2024',
-          parcela_nombre: 'Parcela Norte',
-          socio_nombre: 'Juan Pérez',
-          insumo_nombre: 'Semilla Maíz Híbrido',
-          cantidad_insumo: 50,
-          descripcion: 'Siembra de maíz en parcela norte',
-          observaciones: 'Tierra en buen estado',
-          costo_estimado: 1500,
-          duracion_horas: 8,
-          duracion_display: '8 horas',
-          costo_total: 1800,
-          responsable_nombre: 'María García',
-          creado_en: '2024-01-10T08:00:00Z',
-          actualizado_en: '2024-01-15T18:00:00Z'
-        },
-        {
-          id: 2,
-          fecha_labor: '2024-01-20',
-          labor: 'FERTILIZACION',
-          tipo_labor_display: 'Fertilización',
-          estado: 'EN_PROCESO',
-          campaña_nombre: 'Campaña Maíz 2024',
-          parcela_nombre: 'Parcela Sur',
-          socio_nombre: 'Carlos López',
-          insumo_nombre: 'Fertilizante NPK',
-          cantidad_insumo: 25,
-          descripcion: 'Aplicación de fertilizante base',
-          observaciones: 'Aplicar en horas de la mañana',
-          costo_estimado: 800,
-          duracion_horas: 4,
-          duracion_display: '4 horas',
-          costo_total: 950,
-          responsable_nombre: 'Pedro Martínez',
-          creado_en: '2024-01-18T10:00:00Z',
-          actualizado_en: '2024-01-20T14:00:00Z'
-        },
-        {
-          id: 3,
-          fecha_labor: '2024-01-25',
-          labor: 'COSECHA',
-          tipo_labor_display: 'Cosecha',
-          estado: 'PLANIFICADA',
-          campaña_nombre: 'Campaña Trigo 2024',
-          parcela_nombre: null,
-          socio_nombre: null,
-          insumo_nombre: null,
-          cantidad_insumo: null,
-          descripcion: 'Cosecha de trigo maduro',
-          observaciones: 'Programar para clima seco',
-          costo_estimado: 2000,
-          duracion_horas: 12,
-          duracion_display: '12 horas',
-          costo_total: 2000,
-          responsable_nombre: null,
-          creado_en: '2024-01-22T09:00:00Z',
-          actualizado_en: '2024-01-22T09:00:00Z'
-        }
-      ];
-      setLabores(datosSimulados);
-      calcularEstadisticas(datosSimulados);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Calcular estadísticas
-  const calcularEstadisticas = (data) => {
-    const total = data.length;
-    const planificadas = data.filter(l => l.estado === 'PLANIFICADA').length;
-    const enProceso = data.filter(l => l.estado === 'EN_PROCESO').length;
-    const completadas = data.filter(l => l.estado === 'COMPLETADA').length;
-    const canceladas = data.filter(l => l.estado === 'CANCELADA').length;
-
-    setStats({
-      total,
-      planificadas,
-      enProceso,
-      completadas,
-      canceladas
-    });
-  };
-
-  // Cambiar estado de labor
-  const handleCambiarEstado = async (id, nuevoEstado) => {
-    try {
-      await laborService.cambiarEstado(id, nuevoEstado);
-      cargarLabores(currentPage);
-    } catch (error) {
-      console.error('Error al cambiar estado:', error);
-      alert('Error al cambiar estado: ' + error.message);
-    }
-  };
-
-  // Eliminar labor
-  const handleDelete = async (id) => {
-    if (window.confirm('¿Está seguro de eliminar esta labor?')) {
-      try {
-        await laborService.deleteLabor(id);
-        cargarLabores(currentPage);
-      } catch (error) {
-        console.error('Error al eliminar labor:', error);
-        alert('Error al eliminar labor: ' + error.message);
-      }
-    }
-  };
-
-  // Aplicar filtros
-  const aplicarFiltros = () => {
-    setCurrentPage(1);
-    cargarLabores(1);
-  };
-
-  // Limpiar filtros
-  const limpiarFiltros = () => {
-    setFiltros({
-      estado: '',
-      tipo: '',
-      campana: '',
-      parcela: ''
-    });
-    setSearchTerm('');
-    setCurrentPage(1);
-    cargarLabores(1);
-  };
-
-  // Efecto inicial
-  useEffect(() => {
-    cargarLabores();
-  }, [pageSize]);
-
-  // Render badge de estado
   const renderEstadoBadge = (estado) => {
     const variant = getEstadoBadgeVariant(estado);
     const iconos = {
-      'PLANIFICADA': <Clock className="w-3 h-3" />,
-      'EN_PROCESO': <PlayCircle className="w-3 h-3" />,
-      'COMPLETADA': <CheckCircle className="w-3 h-3" />,
-      'CANCELADA': <XCircle className="w-3 h-3" />
+      PLANIFICADA: <Calendar className="w-3 h-3" />,
+      EN_PROCESO: <PlayCircle className="w-3 h-3" />,
+      COMPLETADA: <CheckCircle className="w-3 h-3" />,
+      CANCELADA: <XCircle className="w-3 h-3" />,
     };
 
     return (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-${variant}/20 text-${variant}-200`}>
-        {iconos[estado]}
+        {iconos[estado] || null}
         <span className="ml-1">{estado.replace('_', ' ')}</span>
       </span>
     );
   };
 
-  // Render badge de tipo de labor
   const renderTipoBadge = (tipo) => {
     const variant = getTipoLaborBadgeVariant(tipo);
     return (
@@ -240,16 +130,164 @@ const LaborPage = () => {
     );
   };
 
-  // Formatear fecha
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('es-ES');
+  // ---- cargar catálogos ----
+  const cargarCatalogos = async () => {
+    const [tRes, eRes] = await Promise.allSettled([
+      laborService.getTiposLabor(),
+      laborService.getEstadosLabor(),
+    ]);
+
+    if (tRes.status === 'fulfilled') {
+      setTiposLabor(normalizeChoices(tRes.value, TIPOS_LABOR_FALLBACK));
+    } else {
+      setTiposLabor(TIPOS_LABOR_FALLBACK);
+      console.warn('[LaborPage] tipos_labor fallback:', tRes.reason?.message);
+    }
+
+    if (eRes.status === 'fulfilled') {
+      setEstadosLabor(normalizeChoices(eRes.value, ESTADOS_FALLBACK));
+    } else {
+      setEstadosLabor(ESTADOS_FALLBACK);
+      console.warn('[LaborPage] estados_labor fallback:', eRes.reason?.message);
+    }
+
+    try {
+      const cs = await campaignService.getCampaigns({ page_size: 1000 });
+      const list = (cs?.results || cs || []).map((c) => ({
+        id: c.id,
+        nombre: c.nombre ?? c.name ?? `Campaña ${c.id}`,
+      }));
+      setCampanias(list);
+    } catch (err) {
+      console.warn('[LaborPage] campañas vacías:', err?.message);
+      setCampanias([]);
+    }
+
+    try {
+      const psRaw = await parcelaService.getParcelas({ page_size: 1000 });
+      const ps = psRaw?.results || psRaw || [];
+      setParcelas(
+        ps.map((p) => ({
+          id: p.id,
+          nombre: p.nombre ?? p.name ?? `Parcela ${p.id}`,
+        }))
+      );
+    } catch (err) {
+      console.warn('[LaborPage] parcelas vacías:', err?.message);
+      setParcelas([]);
+    }
   };
 
-  // Obtener datos únicos para filtros
-  const tiposUnicos = [...new Set(labores.map(l => l.labor).filter(Boolean))];
-  const estadosUnicos = [...new Set(labores.map(l => l.estado).filter(Boolean))];
-  const campanasUnicas = [...new Set(labores.map(l => l.campaña_nombre).filter(Boolean))];
-  const parcelasUnicas = [...new Set(labores.map(l => l.parcela_nombre).filter(Boolean))];
+  // ---- cargar lista ----
+  const cargarLabores = async (page = 1) => {
+    setLoading(true);
+    try {
+      const params = {
+        page,
+        page_size: pageSize,
+        ordering: filtros.ordering || '-fecha_labor,-creado_en',
+      };
+      if (filtros.estado) params.estado = filtros.estado;
+      if (filtros.labor_tipo) params.labor_tipo = filtros.labor_tipo;
+      if (filtros.campania_id) params.campania_id = filtros.campania_id;
+      if (filtros.parcela_id) params.parcela_id = filtros.parcela_id;
+      if (filtros.fecha_desde) params.fecha_labor_desde = filtros.fecha_desde;
+      if (filtros.fecha_hasta) params.fecha_labor_hasta = filtros.fecha_hasta;
+
+      const data = await laborService.getLabores(params);
+      const rows = data.results || data;
+      setLabores(rows);
+      setCount(data.count ?? rows.length);
+      setCurrentPage(page);
+    } catch (error) {
+      console.error('Error al cargar labores:', error);
+      setLabores([]);
+      setCount(0);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---- search local y stats ----
+  const filteredLabores = useMemo(() => {
+    if (!searchTerm) return labores;
+    const term = searchTerm.toLowerCase();
+    return labores.filter((l) => {
+      const campos = [
+        l?.tipo_labor_display,
+        l?.labor,
+        l?.estado,
+        l?.campania_nombre,
+        l?.parcela_nombre,
+        l?.socio_nombre,
+        l?.observaciones,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return campos.includes(term);
+    });
+  }, [labores, searchTerm]);
+
+  const stats = useMemo(() => {
+    const total = filteredLabores.length;
+    const planificadas = filteredLabores.filter((l) => l.estado === 'PLANIFICADA').length;
+    const enProceso = filteredLabores.filter((l) => l.estado === 'EN_PROCESO').length;
+    const completadas = filteredLabores.filter((l) => l.estado === 'COMPLETADA').length;
+    const canceladas = filteredLabores.filter((l) => l.estado === 'CANCELADA').length;
+    return { total, planificadas, enProceso, completadas, canceladas };
+  }, [filteredLabores]);
+
+  // ---- actions ----
+  const handleCambiarEstado = async (id, nuevoEstado) => {
+    try {
+      await laborService.cambiarEstado(id, nuevoEstado);
+      await cargarLabores(currentPage);
+    } catch (e) {
+      console.error('Error al cambiar estado:', e);
+      alert('Error al cambiar estado: ' + (e?.response?.data?.error || e.message));
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('¿Está seguro de eliminar esta labor?')) return;
+    try {
+      await laborService.deleteLabor(id);
+      await cargarLabores(currentPage);
+    } catch (e) {
+      console.error('Error al eliminar labor:', e);
+      alert('Error al eliminar labor: ' + (e?.response?.data?.error || e.message));
+    }
+  };
+
+  const aplicarFiltros = () => {
+    cargarLabores(1);
+  };
+
+  const limpiarFiltros = () => {
+    setFiltros({
+      estado: '',
+      labor_tipo: '',
+      campania_id: '',
+      parcela_id: '',
+      fecha_desde: '',
+      fecha_hasta: '',
+      ordering: '-fecha_labor,-creado_en',
+    });
+    setSearchTerm('');
+    cargarLabores(1);
+  };
+
+  useEffect(() => {
+    (async () => {
+      await cargarCatalogos();
+    })();
+  }, []);
+
+  useEffect(() => {
+    cargarLabores(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageSize]);
 
   if (loading && labores.length === 0) {
     return (
@@ -265,9 +303,7 @@ const LaborPage = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Gestión de Labores Agrícolas</h1>
-          <p className="text-emerald-100/80 mt-1">
-            Registro y seguimiento de actividades agrícolas
-          </p>
+          <p className="text-emerald-100/80 mt-1">Registro y seguimiento de actividades agrícolas</p>
         </div>
         <div className="flex items-center space-x-3 mt-4 sm:mt-0">
           <button
@@ -287,16 +323,16 @@ const LaborPage = () => {
         </div>
       </div>
 
-      {/* Search and Filters */}
+      {/* Search & Filters */}
       <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6 mb-6">
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-emerald-400 w-5 h-5" />
           <input
             type="text"
-            placeholder="Buscar labores por descripción, ubicación o responsable..."
+            placeholder="Buscar por tipo, estado, campaña, parcela, socio u observaciones (en esta página)…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && aplicarFiltros()}
+            onKeyDown={(e) => e.key === 'Enter' && aplicarFiltros()}
             className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-emerald-200/60 focus:outline-none focus:border-emerald-400 transition-colors"
           />
         </div>
@@ -309,7 +345,7 @@ const LaborPage = () => {
             <Filter className="w-4 h-4" />
             <span>Filtros Avanzados</span>
           </button>
-          
+
           <div className="flex items-center space-x-4">
             <select
               value={pageSize}
@@ -325,54 +361,80 @@ const LaborPage = () => {
         </div>
 
         {showFilters && (
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 pt-4 border-t border-white/20 mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4 pt-4 border-t border-white/20 mt-4">
+            {/* Estado */}
             <select
               value={filtros.estado}
-              onChange={(e) => setFiltros({...filtros, estado: e.target.value})}
+              onChange={(e) => setFiltros({ ...filtros, estado: e.target.value })}
               className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-400 transition-colors"
             >
               <option value="" className="bg-gray-800">Todos los Estados</option>
-              {estadosUnicos.map(estado => (
-                <option key={estado} value={estado} className="bg-gray-800">
-                  {estado.replace('_', ' ')}
+              {estadosLabor.map((e) => (
+                <option key={e.valor} value={e.valor} className="bg-gray-800">
+                  {e.etiqueta}
                 </option>
               ))}
             </select>
 
+            {/* Tipo Labor */}
             <select
-              value={filtros.tipo}
-              onChange={(e) => setFiltros({...filtros, tipo: e.target.value})}
+              value={filtros.labor_tipo}
+              onChange={(e) => setFiltros({ ...filtros, labor_tipo: e.target.value })}
               className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-400 transition-colors"
             >
               <option value="" className="bg-gray-800">Todos los Tipos</option>
-              {tiposUnicos.map(tipo => (
-                <option key={tipo} value={tipo} className="bg-gray-800">{tipo}</option>
+              {tiposLabor.map((t) => (
+                <option key={t.valor} value={t.valor} className="bg-gray-800">
+                  {t.etiqueta}
+                </option>
               ))}
             </select>
 
+            {/* Campaña */}
             <select
-              value={filtros.campana}
-              onChange={(e) => setFiltros({...filtros, campana: e.target.value})}
+              value={filtros.campania_id}
+              onChange={(e) => setFiltros({ ...filtros, campania_id: e.target.value })}
               className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-400 transition-colors"
             >
               <option value="" className="bg-gray-800">Todas las Campañas</option>
-              {campanasUnicas.map(campana => (
-                <option key={campana} value={campana} className="bg-gray-800">{campana}</option>
+              {campanias.map((c) => (
+                <option key={c.id} value={c.id} className="bg-gray-800">
+                  {c.nombre}
+                </option>
               ))}
             </select>
 
+            {/* Parcela */}
             <select
-              value={filtros.parcela}
-              onChange={(e) => setFiltros({...filtros, parcela: e.target.value})}
+              value={filtros.parcela_id}
+              onChange={(e) => setFiltros({ ...filtros, parcela_id: e.target.value })}
               className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-400 transition-colors"
             >
               <option value="" className="bg-gray-800">Todas las Parcelas</option>
-              {parcelasUnicas.map(parcela => (
-                <option key={parcela} value={parcela} className="bg-gray-800">{parcela}</option>
+              {parcelas.map((p) => (
+                <option key={p.id} value={p.id} className="bg-gray-800">
+                  {p.nombre}
+                </option>
               ))}
             </select>
 
-            <div className="flex space-x-2">
+            {/* Desde */}
+            <input
+              type="date"
+              value={filtros.fecha_desde}
+              onChange={(e) => setFiltros({ ...filtros, fecha_desde: e.target.value })}
+              className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-400 transition-colors"
+            />
+
+            {/* Hasta */}
+            <input
+              type="date"
+              value={filtros.fecha_hasta}
+              onChange={(e) => setFiltros({ ...filtros, fecha_hasta: e.target.value })}
+              className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-400 transition-colors"
+            />
+
+            <div className="md:col-span-6 flex gap-2">
               <button
                 onClick={aplicarFiltros}
                 className="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-lg transition-colors"
@@ -390,65 +452,41 @@ const LaborPage = () => {
         )}
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-emerald-200/80 text-sm font-medium">Total Labores</p>
+              <p className="text-emerald-200/80 text-sm font-medium">Total (página)</p>
               <p className="text-2xl font-bold text-white">{stats.total}</p>
             </div>
             <Tractor className="w-8 h-8 text-emerald-400" />
           </div>
         </div>
-
         <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-emerald-200/80 text-sm font-medium">Planificadas</p>
-              <p className="text-2xl font-bold text-gray-200">{stats.planificadas}</p>
-            </div>
-            <Clock className="w-8 h-8 text-gray-400" />
-          </div>
+          <p className="text-emerald-200/80 text-sm font-medium">Planificadas</p>
+          <p className="text-2xl font-bold text-gray-200">{stats.planificadas}</p>
         </div>
-
         <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-emerald-200/80 text-sm font-medium">En Proceso</p>
-              <p className="text-2xl font-bold text-yellow-200">{stats.enProceso}</p>
-            </div>
-            <PlayCircle className="w-8 h-8 text-yellow-400" />
-          </div>
+          <p className="text-emerald-200/80 text-sm font-medium">En Proceso</p>
+          <p className="text-2xl font-bold text-yellow-200">{stats.enProceso}</p>
         </div>
-
         <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-emerald-200/80 text-sm font-medium">Completadas</p>
-              <p className="text-2xl font-bold text-green-200">{stats.completadas}</p>
-            </div>
-            <CheckCircle className="w-8 h-8 text-green-400" />
-          </div>
+          <p className="text-emerald-200/80 text-sm font-medium">Completadas</p>
+          <p className="text-2xl font-bold text-green-200">{stats.completadas}</p>
         </div>
-
         <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-emerald-200/80 text-sm font-medium">Canceladas</p>
-              <p className="text-2xl font-bold text-red-200">{stats.canceladas}</p>
-            </div>
-            <XCircle className="w-8 h-8 text-red-400" />
-          </div>
+          <p className="text-emerald-200/80 text-sm font-medium">Canceladas</p>
+          <p className="text-2xl font-bold text-red-200">{stats.canceladas}</p>
         </div>
       </div>
 
-      {/* Table */}
+      {/* Tabla */}
       <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl overflow-hidden">
         <div className="p-6 border-b border-white/20">
           <h2 className="text-xl font-semibold text-white flex items-center space-x-2">
             <Tractor className="w-5 h-5" />
-            <span>Lista de Labores ({labores.length})</span>
+            <span>Lista de Labores ({count} total)</span>
           </h2>
         </div>
 
@@ -456,112 +494,43 @@ const LaborPage = () => {
           <table className="w-full">
             <thead className="bg-white/5">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">
-                  Fecha
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">
-                  Tipo
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">
-                  Estado
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">
-                  Ubicación
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">
-                  Insumos
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">
-                  Duración
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">
-                  Costos
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">
-                  Responsable
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">
-                  Acciones
-                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">Fecha</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">Tipo</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">Estado</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">Ubicación</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">Observaciones</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-emerald-200 uppercase tracking-wider">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
-              {labores.map((labor) => (
+              {filteredLabores.map((labor) => (
                 <tr key={labor.id} className="hover:bg-white/5 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-white font-semibold">
-                      {formatDate(labor.fecha_labor)}
-                    </div>
-                    <div className="text-emerald-200/60 text-sm">
-                      Creado: {new Date(labor.creado_en).toLocaleDateString('es-ES')}
-                    </div>
+                    <div className="text-white font-semibold">{formatDate(labor.fecha_labor)}</div>
+                    <div className="text-emerald-200/60 text-sm">Creado: {formatDate(labor.creado_en)}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {renderTipoBadge(labor.labor)}
                     <div className="text-emerald-200/60 text-sm mt-1">
-                      {labor.tipo_labor_display}
+                      {labor.tipo_labor_display || tipoMap[labor.labor] || labor.labor}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {renderEstadoBadge(labor.estado)}
-                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">{renderEstadoBadge(labor.estado)}</td>
                   <td className="px-6 py-4">
                     <div className="text-white font-medium">
-                      {labor.campaña_nombre || labor.parcela_nombre || 'Sin ubicación'}
+                      {labor.campania_nombre || labor.parcela_nombre || 'Sin ubicación'}
                     </div>
                     {labor.socio_nombre && (
-                      <div className="text-emerald-200/60 text-sm">
-                        Socio: {labor.socio_nombre}
-                      </div>
+                      <div className="text-emerald-200/60 text-sm">Socio: {labor.socio_nombre}</div>
                     )}
-                    {labor.campaña_nombre && labor.parcela_nombre && (
-                      <div className="text-emerald-200/60 text-sm">
-                        Parcela: {labor.parcela_nombre}
-                      </div>
+                    {labor.campania_nombre && labor.parcela_nombre && (
+                      <div className="text-emerald-200/60 text-sm">Parcela: {labor.parcela_nombre}</div>
                     )}
                   </td>
                   <td className="px-6 py-4">
-                    {labor.insumo_nombre ? (
-                      <>
-                        <div className="text-white font-medium flex items-center space-x-1">
-                          <Package className="w-3 h-3" />
-                          <span>{labor.insumo_nombre}</span>
-                        </div>
-                        <div className="text-emerald-200/60 text-sm">
-                          {labor.cantidad_insumo} unidades
-                        </div>
-                      </>
-                    ) : (
-                      <span className="text-emerald-200/60 italic">Sin insumo</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-white font-medium flex items-center space-x-1">
-                      <Clock className="w-3 h-3" />
-                      <span>{labor.duracion_display || 'N/A'}</span>
-                    </div>
-                    {labor.duracion_horas && (
-                      <div className="text-emerald-200/60 text-sm">
-                        {labor.duracion_horas} horas
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-white font-medium flex items-center space-x-1">
-                      <DollarSign className="w-3 h-3" />
-                      <span>{formatMoneda(labor.costo_total || 0)}</span>
-                    </div>
-                    {labor.costo_estimado && (
-                      <div className="text-emerald-200/60 text-sm">
-                        Est: {formatMoneda(labor.costo_estimado)}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-white font-medium flex items-center space-x-1">
-                      <User className="w-3 h-3" />
-                      <span>{labor.responsable_nombre || 'No asignado'}</span>
-                    </div>
+                    <span className="text-emerald-200/80 text-sm line-clamp-2">
+                      {labor.observaciones || <em className="opacity-60">—</em>}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-2">
@@ -579,8 +548,7 @@ const LaborPage = () => {
                       >
                         <Edit className="w-4 h-4" />
                       </button>
-                      
-                      {/* Botones de cambio de estado */}
+
                       {labor.estado !== 'COMPLETADA' && (
                         <button
                           onClick={() => handleCambiarEstado(labor.id, 'COMPLETADA')}
@@ -590,7 +558,7 @@ const LaborPage = () => {
                           <CheckCircle className="w-4 h-4" />
                         </button>
                       )}
-                      
+
                       {labor.estado !== 'EN_PROCESO' && labor.estado !== 'COMPLETADA' && (
                         <button
                           onClick={() => handleCambiarEstado(labor.id, 'EN_PROCESO')}
@@ -600,7 +568,7 @@ const LaborPage = () => {
                           <PlayCircle className="w-4 h-4" />
                         </button>
                       )}
-                      
+
                       {labor.estado !== 'CANCELADA' && (
                         <button
                           onClick={() => handleCambiarEstado(labor.id, 'CANCELADA')}
@@ -630,8 +598,7 @@ const LaborPage = () => {
         {totalPages > 1 && (
           <div className="px-6 py-4 border-t border-white/20 flex items-center justify-between">
             <div className="text-emerald-200/60 text-sm">
-              Mostrando {((currentPage - 1) * pageSize) + 1} -{' '}
-              {Math.min(currentPage * pageSize, labores.length)} de {labores.length} labores
+              Mostrando página {currentPage} de {totalPages} — {count} registros
             </div>
             <div className="flex space-x-2">
               <button
@@ -645,14 +612,10 @@ const LaborPage = () => {
               >
                 Anterior
               </button>
-              
+
               {[...Array(totalPages)].map((_, i) => {
                 const page = i + 1;
-                if (
-                  page === 1 ||
-                  page === totalPages ||
-                  (page >= currentPage - 1 && page <= currentPage + 1)
-                ) {
+                if (page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)) {
                   return (
                     <button
                       key={page}
@@ -669,13 +632,13 @@ const LaborPage = () => {
                 } else if (page === currentPage - 2 || page === currentPage + 2) {
                   return (
                     <span key={page} className="px-2 py-1 text-emerald-200/60">
-                      ...
+                      …
                     </span>
                   );
                 }
                 return null;
               })}
-              
+
               <button
                 onClick={() => currentPage < totalPages && cargarLabores(currentPage + 1)}
                 disabled={currentPage === totalPages}
@@ -691,15 +654,10 @@ const LaborPage = () => {
           </div>
         )}
 
-        {labores.length === 0 && (
+        {labores.length === 0 && !loading && (
           <div className="text-center py-12">
             <Tractor className="w-12 h-12 text-emerald-400/50 mx-auto mb-4" />
-            <p className="text-emerald-100/60">
-              {searchTerm || Object.values(filtros).some(f => f) 
-                ? 'No se encontraron labores con esos criterios de búsqueda' 
-                : 'No hay labores registradas'
-              }
-            </p>
+            <p className="text-emerald-100/60">No hay labores registradas</p>
             <button
               onClick={() => navigate('/labores/nueva')}
               className="mt-4 bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center space-x-2 mx-auto"
