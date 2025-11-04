@@ -42,6 +42,11 @@ import ProductosCosechadosPage from './pages/ProductosCosechadosPage';
 import ProductosCosechadosFormPage from './pages/ProductosCosechadosFormPage';
 import ProductosCosechadosDetailPage from './pages/ProductosCosechadosDetailPage';
 
+// ===== CU16: Gestión de Métodos de Pago =====
+import PaymentMethodPage from './pages/PaymentMethodPage';
+import PaymentMethodFormPage from './pages/PaymentMethodFormPage';
+import PaymentMethodDetailPage from './pages/PaymentMethodDetailPage';
+
 // Componente protegido con layout
 const ProtectedLayout = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -360,6 +365,40 @@ function App() {
               element={
                 <ProtectedLayout>
                   <ProductosCosechadosFormPage />
+                </ProtectedLayout>
+              }
+            />
+
+            {/* ===== CU16: MÉTODOS DE PAGO ===== */}
+            <Route
+              path="/payment-methods"
+              element={
+                <ProtectedLayout>
+                  <PaymentMethodPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/payment-methods/nuevo"
+              element={
+                <ProtectedLayout>
+                  <PaymentMethodFormPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/payment-methods/:id"
+              element={
+                <ProtectedLayout>
+                  <PaymentMethodDetailPage />
+                </ProtectedLayout>
+              }
+            />
+            <Route
+              path="/payment-methods/:id/editar"
+              element={
+                <ProtectedLayout>
+                  <PaymentMethodFormPage />
                 </ProtectedLayout>
               }
             />
