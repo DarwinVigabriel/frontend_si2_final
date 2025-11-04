@@ -18,7 +18,8 @@ import {
   ChevronRight,
   Map,
   Package,
-  Tractor // ✅ NUEVO ICONO IMPORTADO PARA LABORES
+  Tractor,
+  CreditCard // ✅ NUEVO ICONO IMPORTADO PARA MÉTODOS DE PAGO
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -82,18 +83,25 @@ const Sidebar = ({ isOpen, onClose }) => {
       icon: FlaskConical,
       always: true
     },
-    // ✅ NUEVO ITEM - CU10: Labores Agrícolas
+    // ✅ CU10: Labores Agrícolas
     {
       path: '/labores',
       label: 'Labores Agrícolas',
-      icon: Tractor, // Icono apropiado para labores agrícolas
+      icon: Tractor,
       always: true
     },
-    // ✅ NUEVO ITEM - CU15: Productos Cosechados
+    // ✅ CU15: Productos Cosechados
     {
       path: '/productos-cosechados',
       label: 'Productos Cosechados',
-      icon: Package, // Icono apropiado para productos cosechados
+      icon: Package,
+      always: true
+    },
+    // ✅ CU16: Métodos de Pago - NUEVO ITEM
+    {
+      path: '/payment-methods',
+      label: 'Métodos de Pago',
+      icon: CreditCard,
       always: true
     },
     {
@@ -136,10 +144,12 @@ const Sidebar = ({ isOpen, onClose }) => {
         fixed inset-y-0 left-0 z-40
         w-64 bg-white/10 backdrop-blur-lg border-r border-white/20
         transform transition-transform duration-300 ease-in-out
+        flex flex-col
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        lg:translate-x-0
       `}>
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-white/20">
+        <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-white/20">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center">
               <Shield className="w-4 h-4 text-white" />
@@ -156,9 +166,16 @@ const Sidebar = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-4 py-6 overflow-y-auto">
-          <ul className="space-y-2">
+        {/* Navigation with scroll */}
+        <nav className="flex-1 overflow-hidden hover:overflow-y-auto py-4">
+          {/* Scroll indicator for tall menus */}
+          <div className="px-4 mb-2">
+            <div className="text-xs text-emerald-200/60 font-medium uppercase tracking-wider">
+              Navegación
+            </div>
+          </div>
+
+          <ul className="space-y-1 px-2">
             {menuItems.map((item) => {
               const Icon = item.icon;
               const hasSubMenu = item.subMenu && item.subMenu.length > 0;
@@ -186,7 +203,7 @@ const Sidebar = ({ isOpen, onClose }) => {
 
                       {/* Submenú expandible */}
                       {isExpanded && (
-                        <ul className="mt-2 ml-4 space-y-1 border-l-2 border-white/10 pl-4">
+                        <ul className="mt-1 ml-4 space-y-1 border-l-2 border-white/10 pl-4">
                           {item.subMenu.map((subItem) => {
                             const SubIcon = subItem.icon;
                             return (
@@ -232,11 +249,30 @@ const Sidebar = ({ isOpen, onClose }) => {
               );
             })}
           </ul>
+
+          {/* Scroll helper text for mobile */}
+          <div className="lg:hidden px-4 mt-4">
+            <div className="text-center">
+              <div className="text-xs text-emerald-200/40 animate-bounce">
+                ↑ Desplázate para ver más opciones ↑
+              </div>
+            </div>
+          </div>
         </nav>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-white/20">
+        {/* User info and logout - Fixed at bottom */}
+        <div className="flex-shrink-0 p-4 border-t border-white/20">
           <div className="space-y-3">
+            {/* User info */}
+            <div className="text-center p-2 bg-white/5 rounded-lg">
+              <p className="text-white text-sm font-medium truncate">
+                {user?.nombre || user?.username || 'Usuario'}
+              </p>
+              <p className="text-emerald-200/60 text-xs truncate">
+                {user?.rol || 'Administrador'}
+              </p>
+            </div>
+
             <div className="text-center">
               <p className="text-white/60 text-xs">
                 Sistema de Gestión
@@ -245,6 +281,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                 Cooperativa Agrícola
               </p>
             </div>
+            
             <button
               onClick={handleLogout}
               className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 hover:text-red-100 rounded-lg transition-all duration-200 border border-red-400/30 hover:border-red-400/50"
